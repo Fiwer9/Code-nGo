@@ -1,0 +1,14 @@
+# Тяжелые датасеты и CSV
+*.csv
+data/
+
+# Виртуальное окружение Python и кэш
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Секреты и настройки IDE
+.env
+.idea/
+.vscode/
