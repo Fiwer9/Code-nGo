@@ -2,6 +2,7 @@
 import { Shield, Lock, Key, AlertTriangle, CheckCircle2, Activity } from 'lucide-react'
 import Card from '@/components/Card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useChartTheme } from '@/lib/useChartTheme'
 
 const securityEvents = [
   { time: '14:32', type: 'login',    user: 'd.smirnov',  status: 'success', ip: '10.1.2.45' },
@@ -23,6 +24,7 @@ const attemptsData = [
 ]
 
 export default function SecurityPage() {
+  const chart = useChartTheme()
   const policies = [
     { name: 'TLS 1.2+',                 enabled: true,  desc: 'Шифрование передачи данных' },
     { name: 'LDAP/AD Аутентификация',   enabled: true,  desc: 'Корпоративная служба каталогов' },
@@ -92,10 +94,10 @@ export default function SecurityPage() {
           <h3 className="text-lg font-semibold text-surface-900 mb-4">Попытки входа по дням</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={attemptsData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="day" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="day" stroke={chart.axis} fontSize={12} />
+              <YAxis stroke={chart.axis} fontSize={12} />
+              <Tooltip contentStyle={chart.tooltip} />
               <Bar dataKey="success" fill="#10b981" radius={[4,4,0,0]} name="Успешные" />
               <Bar dataKey="failed"  fill="#ef4444" radius={[4,4,0,0]} name="Неудачные" />
             </BarChart>

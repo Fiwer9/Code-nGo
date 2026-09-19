@@ -5,8 +5,10 @@ import Card from '@/components/Card'
 import { incidents, chartData } from '@/lib/mockData'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import Link from 'next/link'
+import { useChartTheme } from '@/lib/useChartTheme'
 
 export default function DashboardPage() {
+  const chart = useChartTheme()
   const pieData = [
     { name: 'Подтопления',     value: 42, color: '#3b82f6' },
     { name: 'Пожары',          value: 28, color: '#ef4444' },
@@ -44,10 +46,10 @@ export default function DashboardPage() {
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="hour" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="hour" stroke={chart.axis} fontSize={12} />
+              <YAxis stroke={chart.axis} fontSize={12} />
+              <Tooltip contentStyle={chart.tooltip} />
               <Legend />
               <Line type="monotone" dataKey="incidents"    stroke="#ef4444" strokeWidth={2} name="Инциденты" dot={false} />
               <Line type="monotone" dataKey="falseAlarms" stroke="#f59e0b" strokeWidth={2} name="Ложные"    dot={false} />
@@ -63,7 +65,7 @@ export default function DashboardPage() {
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
                 {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8 }} />
+              <Tooltip contentStyle={chart.tooltip} />
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-2 mt-2">

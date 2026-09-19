@@ -51,7 +51,7 @@ export default function Header() {
           </button>
 
           {showNotif && (
-            <div className="absolute right-0 top-12 w-96 bg-surface-100 border border-surface-200 rounded-xl shadow-2xl shadow-black/50 animate-fadeIn">
+            <div className="absolute right-0 top-12 w-96 bg-surface-100 border border-surface-200 rounded-xl shadow-xl shadow-surface-900/10 dark:shadow-black/50 animate-fadeIn">
               <div className="p-4 border-b border-surface-200">
                 <div className="font-semibold">Уведомления</div>
                 <div className="text-xs text-surface-500">3 новых события</div>
@@ -94,7 +94,7 @@ export default function Header() {
           </button>
 
           {showUser && (
-            <div className="absolute right-0 top-12 w-64 bg-surface-100 border border-surface-200 rounded-xl shadow-2xl shadow-black/50 animate-fadeIn">
+            <div className="absolute right-0 top-12 w-64 bg-surface-100 border border-surface-200 rounded-xl shadow-xl shadow-surface-900/10 dark:shadow-black/50 animate-fadeIn">
               <Link href="/admin/users" className="flex items-center gap-3 p-3 hover:bg-surface-200/50 rounded-t-xl">
                 <User size={16} />
                 <span className="text-sm">Профиль</span>

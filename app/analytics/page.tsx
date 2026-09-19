@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, AreaChart, Area, Legend
 } from 'recharts'
 import { chartData } from '@/lib/mockData'
+import { useChartTheme } from '@/lib/useChartTheme'
 
 const monthlyData = [
   { month: 'Янв', accuracy: 82, precision: 78, recall: 85 },
@@ -29,6 +30,7 @@ const modelPerf = [
 ]
 
 export default function AnalyticsPage() {
+  const chart = useChartTheme()
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
       <div>
@@ -62,10 +64,10 @@ export default function AnalyticsPage() {
                   <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+              <XAxis dataKey="month" stroke={chart.axis} fontSize={12} />
+              <YAxis stroke={chart.axis} fontSize={12} />
+              <Tooltip contentStyle={chart.tooltip} />
               <Legend />
               <Area type="monotone" dataKey="accuracy"  stroke="#3b82f6" fill="url(#g1)" name="Accuracy" />
               <Area type="monotone" dataKey="precision" stroke="#10b981" fill="url(#g2)" name="Precision" />
@@ -104,10 +106,10 @@ export default function AnalyticsPage() {
         <h3 className="text-lg font-semibold text-surface-900 mb-4">Инциденты по часам (реальное время)</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis dataKey="hour" stroke="#6b7280" fontSize={12} />
-            <YAxis stroke="#6b7280" fontSize={12} />
-            <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 8 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />
+            <XAxis dataKey="hour" stroke={chart.axis} fontSize={12} />
+            <YAxis stroke={chart.axis} fontSize={12} />
+            <Tooltip contentStyle={chart.tooltip} />
             <Legend />
             <Bar dataKey="incidents" fill="#ef4444" radius={[4,4,0,0]} name="Инциденты" />
             <Bar dataKey="falseAlarms" fill="#f59e0b" radius={[4,4,0,0]} name="Ложные" />
