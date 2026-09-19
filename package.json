@@ -1,6 +1,11 @@
 {
-  "name": "test_moskollector",
+  "name": "moskollector-frontend",
   "version": "1.0.0",
+  "private": true,
+  "description": "Фронтенд системы мониторинга коллекторов АО «Москоллектор»",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
