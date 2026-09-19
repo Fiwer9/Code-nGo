@@ -1,13 +1,45 @@
 'use client'
 import { Bell, Search, Sun, Moon, User, LogOut } from 'lucide-react'
 import { useTheme } from './ThemeProvider'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
 export default function Header() {
   const { theme, toggle } = useTheme()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+  const userRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showNotif && !showUser) return
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node
+      if (showNotif && notifRef.current && !notifRef.current.contains(target)) {
+        setShowNotif(false)
+      }
+      if (showUser && userRef.current && !userRef.current.contains(target)) {
+        setShowUser(false)
+      }
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNotif(false)
+        setShowUser(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [showNotif, showUser])
 
   const notifications = [
     { id: 1, type: 'critical', text: 'Критический инцидент: МК-6.7.8, подтопление', time: '5 мин' },
@@ -15,7 +47,7 @@ export default function Header() {
     { id: 3, type: 'info',     text: 'Модель обновлена: Precision 92.4%',            time: '1 ч' }
   ]
 
-  const typeColors: any = {
+  const typeColors: Record<string, string> = {
     critical: 'bg-danger', warning: 'bg-warning', info: 'bg-info'
   }
 
@@ -41,10 +73,12 @@ export default function Header() {
         </button>
 
         {/* Уведомления */}
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
-            onClick={() => { setShowNotif(!showNotif); setShowUser(false) }}
+            onClick={() => { setShowNotif(v => !v); setShowUser(false) }}
             className="p-2 rounded-lg hover:bg-surface-200 text-surface-600 hover:text-surface-900 transition relative"
+            aria-expanded={showNotif}
+            aria-haspopup="true"
           >
             <Bell size={18} />
             <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full animate-pulse-ring" />
@@ -70,7 +104,11 @@ export default function Header() {
                 ))}
               </div>
               <div className="p-3 text-center">
-                <Link href="/predictions" className="text-sm text-primary-400 hover:text-primary-300">
+                <Link
+                  href="/predictions"
+                  className="text-sm text-primary-400 hover:text-primary-300"
+                  onClick={() => setShowNotif(false)}
+                >
                   Показать все →
                 </Link>
               </div>
@@ -79,10 +117,12 @@ export default function Header() {
         </div>
 
         {/* Пользователь */}
-        <div className="relative">
+        <div className="relative" ref={userRef}>
           <button
-            onClick={() => { setShowUser(!showUser); setShowNotif(false) }}
+            onClick={() => { setShowUser(v => !v); setShowNotif(false) }}
             className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-surface-200 transition"
+            aria-expanded={showUser}
+            aria-haspopup="true"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-semibold text-sm">
               ДС
@@ -95,7 +135,11 @@ export default function Header() {
 
           {showUser && (
             <div className="absolute right-0 top-12 w-64 bg-surface-100 border border-surface-200 rounded-xl shadow-xl shadow-surface-900/10 dark:shadow-black/50 animate-fadeIn">
-              <Link href="/admin/users" className="flex items-center gap-3 p-3 hover:bg-surface-200/50 rounded-t-xl">
+              <Link
+                href="/admin/users"
+                className="flex items-center gap-3 p-3 hover:bg-surface-200/50 rounded-t-xl"
+                onClick={() => setShowUser(false)}
+              >
                 <User size={16} />
                 <span className="text-sm">Профиль</span>
               </Link>
