@@ -20,6 +20,13 @@ from app.database import Base
 
 
 class UserModel(Base):
+    """
+    ORM-модель таблицы пользователей системы (диспетчеры, инженеры, админы).
+    
+    Особенности:
+    - `CheckConstraint`: ограничения на уровне PostgreSQL для поля gender.
+    - `updated_at`: автоматическое обновление таймштампа при любых изменениях записи через `onupdate=func.now()`.
+    """
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
@@ -50,6 +57,14 @@ class UserModel(Base):
 
 
 class ObjectModel(Base):
+    """
+    ORM-модель инфраструктурных объектов Москоллектора (коллекторы, узлы, участки).
+    
+    Особенности:
+    - Поддержка иерархии объектов через `parent_id` и `hierarchy_level`.
+    - `geometry`: геопространственные данные (PostGIS). 
+      SRID 4326 указывает на географическую систему координат WGS 84 (широта/долгота для карт).
+    """
     __tablename__ = "objects"
 
     id = Column(Integer, primary_key=True)
@@ -61,6 +76,12 @@ class ObjectModel(Base):
 
 
 class ChannelModel(Base):
+    """
+    ORM-модель каналов датчиков телеметрии.
+    
+    Каждый канал привязан к конкретному объекту инфраструктуры (`object_id`) 
+    и описывает тип измеряемого параметра (температура, задымление, открытие люка и т.д.).
+    """
     __tablename__ = "channels"
 
     id = Column(Integer, primary_key=True)
@@ -72,11 +93,16 @@ class ChannelModel(Base):
 
 
 class SensorLogModel(Base):
+    """
+    ORM-модель для телеметрии и журнала событий датчиков.
+    
+    Особенности архитектуры:
+    - На уровне базы данных таблица `sensor_logs` является СЕКЦИОНИРОВАННОЙ (партиционированной) по дате.
+    - Фактический Primary Key в PostgreSQL на партиционированных таблицах должен включать ключ партиционирования.
+    - Поле `id` помечено `primary_key=True` исключительно для корректной работы маппера SQLAlchemy ORM.
+    """
     __tablename__ = "sensor_logs"
 
-    # ORM identity only. The physical partitioned table intentionally has no PK,
-    # because a PostgreSQL unique/PK constraint on a partitioned table must include
-    # the partition key as well.
     id = Column(BigInteger, primary_key=True)
     channel_id = Column(Integer, nullable=False)
     event_date = Column(Date, nullable=False)
@@ -87,6 +113,15 @@ class SensorLogModel(Base):
 
 
 class PredictionModel(Base):
+    """
+    ORM-модель результатов предиктивной аналитики (ML-модуль).
+    
+    Служит для хранения прогнозов рисков и инцидентов на объектах/каналах.
+    - `risk_score`: вероятность/оценка риска в диапазоне от 0.0 до 1.0.
+    - `horizon_hours`: горизонт прогнозирования (например, риск аварии в ближайшие 24 часа).
+    - `features_explanation`: JSON-поле с интерпретацией факторов риска (SHAP values / Feature Importance) 
+      для отображения понятной аналитики пользователю.
+    """
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
