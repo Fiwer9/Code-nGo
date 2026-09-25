@@ -61,6 +61,16 @@ lib/           # утилиты и мок-данные
 public/        # статика (при появлении)
 ```
 
+### Яндекс.Карты
+
+На `/map` используется [JavaScript API Яндекс.Карт](https://yandex.ru/dev/maps/). Ключ задаётся в `.env.local`:
+
+```bash
+NEXT_PUBLIC_YANDEX_MAPS_KEY=ваш_ключ
+```
+
+Координаты объектов пока демо (см. `mapObjects` в `lib/mockData.ts`). Правки положения на карте сохраняются в `localStorage` браузера.
+
 ## Примечание для Windows / PowerShell
 
 Если `npm` не находится — проверьте, что Node.js добавлен в PATH, и перезапустите терминал.
