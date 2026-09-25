@@ -12,10 +12,7 @@ export type MapSelectPoint = { clientX: number; clientY: number }
 type Props = {
   objects: MapObject[]
   selectedId: string | null
-  editMode: boolean
   onSelect: (id: string, point: MapSelectPoint) => void
-  onCoordsChange: (id: string, lat: number, lng: number) => void
-  onMapClickPlace?: (lat: number, lng: number) => void
 }
 
 function readClientPoint(e: any): MapSelectPoint {
@@ -30,14 +27,7 @@ function readClientPoint(e: any): MapSelectPoint {
   }
 }
 
-export default function YandexMap({
-  objects,
-  selectedId,
-  editMode,
-  onSelect,
-  onCoordsChange,
-  onMapClickPlace
-}: Props) {
+export default function YandexMap({ objects, selectedId, onSelect }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_KEY
 
   const defaultState = useMemo(
@@ -68,30 +58,23 @@ export default function YandexMap({
         height="100%"
         options={{ suppressMapOpenBlock: true }}
         modules={['control.ZoomControl', 'control.GeolocationControl']}
-        onClick={(e: any) => {
-          if (!editMode || !selectedId || !onMapClickPlace) return
-          if (e.get('target') !== e.get('map')) return
-          const coords = e.get('coords') as [number, number]
-          if (coords) onMapClickPlace(coords[0], coords[1])
-        }}
       >
         <ZoomControl options={{ position: { right: 16, bottom: 100 } }} />
         <GeolocationControl options={{ position: { right: 16, bottom: 160 } }} />
 
         {objects.map((obj) => {
           const selected = selectedId === obj.id
-          const draggable = editMode && selected
           const status = deriveCollectorStatus(obj.sensors)
           const color = COLLECTOR_STATUS_META[status].color
 
           return (
             <Placemark
-              key={`${obj.id}-${draggable}-${status}`}
+              key={`${obj.id}-${status}-${obj.lat}-${obj.lng}`}
               geometry={[obj.lat, obj.lng]}
               options={{
                 preset: selected ? 'islands#dotIcon' : 'islands#circleDotIcon',
                 iconColor: color,
-                draggable,
+                draggable: false,
                 zIndex: selected ? 1000 : 100,
                 zIndexHover: 900,
                 openBalloonOnClick: false,
@@ -103,11 +86,6 @@ export default function YandexMap({
               onClick={(e: any) => {
                 e.stopPropagation()
                 onSelect(obj.id, readClientPoint(e))
-              }}
-              onDragEnd={(e: any) => {
-                const target = e.get('target')
-                const coords = target.geometry.getCoordinates() as [number, number]
-                onCoordsChange(obj.id, coords[0], coords[1])
               }}
             />
           )

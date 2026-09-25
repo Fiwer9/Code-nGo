@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import {
   Cpu,
   Thermometer,
@@ -10,20 +11,21 @@ import {
   Gauge,
   Activity,
   Pencil,
-  RotateCcw,
   Crosshair,
   MapPin,
   Radio
 } from 'lucide-react'
 import Card from '@/components/Card'
 import CollectorPopup, { type PopupPos } from '@/components/CollectorPopup'
+import EditObjectModal from '@/components/EditObjectModal'
 import type { CollectorSensor, MapObject, MapObjectStatus, SensorStatus } from '@/lib/mockData'
 import {
   COLLECTOR_STATUS_META,
   deriveCollectorStatus,
   placePopupNearPoint
 } from '@/lib/collectorStatus'
-import { loadMapObjects, resetMapObjectCoords, saveMapObjectCoords } from '@/lib/mapObjectsStore'
+import { loadMapObjects, persistMapObjects } from '@/lib/mapObjectsStore'
+import { updateMapObject } from '@/lib/api/mapObjects'
 import type { MapSelectPoint } from '@/components/YandexMap'
 import clsx from 'clsx'
 
@@ -63,6 +65,13 @@ const readingLevel: Record<string, string> = {
 
 const STATUS_KEYS = Object.keys(COLLECTOR_STATUS_META) as MapObjectStatus[]
 
+function cloneObject(o: MapObject): MapObject {
+  return {
+    ...o,
+    sensors: o.sensors.map((s) => ({ ...s, readings: s.readings.map((r) => ({ ...r })) }))
+  }
+}
+
 function pickDefaultSensor(sensors: CollectorSensor[]) {
   return (
     sensors.find((s) => s.status === 'critical') ??
@@ -74,6 +83,7 @@ function pickDefaultSensor(sensors: CollectorSensor[]) {
 }
 
 export default function MapPage() {
+  const router = useRouter()
   const mapBoxRef = useRef<HTMLDivElement>(null)
   const [objects, setObjects] = useState<MapObject[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -81,38 +91,37 @@ export default function MapPage() {
   const [popupPos, setPopupPos] = useState<PopupPos>({ x: 24, y: 24 })
   const [filter, setFilter] = useState<string>('all')
   const [editMode, setEditMode] = useState(false)
-  const [latInput, setLatInput] = useState('')
-  const [lngInput, setLngInput] = useState('')
+  const [editDraft, setEditDraft] = useState<MapObject | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [savedHint, setSavedHint] = useState(false)
 
   useEffect(() => {
     setObjects(loadMapObjects())
   }, [])
 
-  const objectStatus = useCallback(
-    (o: MapObject) => deriveCollectorStatus(o.sensors),
-    []
-  )
+  const objectStatus = useCallback((o: MapObject) => deriveCollectorStatus(o.sensors), [])
 
   const filtered =
     filter === 'all' ? objects : objects.filter((o) => objectStatus(o) === filter)
-  const sel = objects.find((o) => o.id === selected) ?? null
+  const sel = !editMode ? objects.find((o) => o.id === selected) ?? null : null
   const selectedSensor = sel?.sensors.find((s) => s.id === selectedSensorId) ?? null
-
-  useEffect(() => {
-    if (sel) {
-      setLatInput(sel.lat.toFixed(6))
-      setLngInput(sel.lng.toFixed(6))
-    } else {
-      setLatInput('')
-      setLngInput('')
-    }
-  }, [sel?.id, sel?.lat, sel?.lng])
+  const mapSelectedId = editMode ? editDraft?.id ?? null : selected
 
   const handleSelectCollector = (id: string, point: MapSelectPoint) => {
-    setSelected(id)
     const obj = objects.find((o) => o.id === id)
-    setSelectedSensorId(pickDefaultSensor(obj?.sensors ?? [])?.id ?? null)
+    if (!obj) return
+
+    if (editMode) {
+      setEditDraft(cloneObject(obj))
+      setSaveError(null)
+      setSelected(null)
+      setSelectedSensorId(null)
+      return
+    }
+
+    setSelected(id)
+    setSelectedSensorId(pickDefaultSensor(obj.sensors)?.id ?? null)
 
     const box = mapBoxRef.current
     if (box) {
@@ -128,29 +137,18 @@ export default function MapPage() {
     }
   }
 
-  const updateCoords = useCallback((id: string, lat: number, lng: number) => {
-    setObjects((prev) => {
-      const next = prev.map((o) => (o.id === id ? { ...o, lat, lng } : o))
-      saveMapObjectCoords(next)
+  const toggleEditMode = () => {
+    setEditMode((v) => {
+      const next = !v
+      if (next) {
+        setSelected(null)
+        setSelectedSensorId(null)
+      } else {
+        setEditDraft(null)
+        setSaveError(null)
+      }
       return next
     })
-    setSavedHint(true)
-    window.setTimeout(() => setSavedHint(false), 1500)
-  }, [])
-
-  const applyFormCoords = () => {
-    if (!sel) return
-    const lat = Number(latInput.replace(',', '.'))
-    const lng = Number(lngInput.replace(',', '.'))
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-    updateCoords(sel.id, lat, lng)
-  }
-
-  const handleReset = () => {
-    resetMapObjectCoords()
-    setObjects(loadMapObjects())
-    setSavedHint(true)
-    window.setTimeout(() => setSavedHint(false), 1500)
   }
 
   const closePopup = () => {
@@ -158,45 +156,57 @@ export default function MapPage() {
     setSelectedSensorId(null)
   }
 
+  const handleCancelEdit = () => {
+    if (saving) return
+    setEditDraft(null)
+    setSaveError(null)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editDraft || saving) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const saved = await updateMapObject(editDraft)
+      setObjects((prev) => {
+        const next = prev.map((o) => (o.id === saved.id ? cloneObject(saved) : o))
+        persistMapObjects(next)
+        return next
+      })
+      setEditDraft(null)
+      setSavedHint(true)
+      window.setTimeout(() => setSavedHint(false), 1800)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-surface-900">Карта объектов</h1>
-          <p className="text-surface-600 mt-1">
-            Коллекторы Москвы · цвет метки = статус датчиков внутри
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEditMode((v) => !v)}
-            className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition ${
-              editMode
-                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/30'
-                : 'bg-surface-200 hover:bg-surface-300 text-surface-800'
-            }`}
-          >
-            <Pencil size={16} />
-            {editMode ? 'Редактирование вкл.' : 'Редактировать положение'}
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="px-3 py-2 bg-surface-200 hover:bg-surface-300 rounded-lg text-sm flex items-center gap-2 transition text-surface-800"
-            title="Сбросить координаты к демо-значениям"
-          >
-            <RotateCcw size={16} /> Сбросить
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold text-surface-900">Карта объектов</h1>
+        <button
+          type="button"
+          onClick={toggleEditMode}
+          className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition ${
+            editMode
+              ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/30'
+              : 'bg-surface-200 hover:bg-surface-300 text-surface-800'
+          }`}
+        >
+          <Pencil size={16} />
+          {editMode ? 'Редактирование вкл.' : 'Редактировать объекты'}
+        </button>
       </div>
 
       {editMode && (
         <div className="rounded-lg border border-primary-600/40 bg-primary-600/10 px-4 py-2.5 text-sm text-surface-800 flex items-start gap-2">
           <Crosshair size={16} className="mt-0.5 shrink-0 text-primary-600" />
           <span>
-            Выберите коллектор, затем перетащите метку или кликните по карте. Окно объекта можно
-            двигать за верхнюю полоску.
+            Режим редактирования: кликните по объекту на карте, чтобы открыть карточку с данными,
+            датчиками и координатами. Изменения сохраняются в БД по кнопке «Сохранить».
           </span>
         </div>
       )}
@@ -207,13 +217,8 @@ export default function MapPage() {
             <div ref={mapBoxRef} className="relative w-full h-[600px] bg-surface-200">
               <YandexMap
                 objects={filtered}
-                selectedId={selected}
-                editMode={editMode}
+                selectedId={mapSelectedId}
                 onSelect={handleSelectCollector}
-                onCoordsChange={updateCoords}
-                onMapClickPlace={(lat, lng) => {
-                  if (selected) updateCoords(selected, lat, lng)
-                }}
               />
 
               <div className="absolute top-4 left-4 bg-surface-100/90 backdrop-blur border border-surface-200 rounded-lg p-3 text-xs pointer-events-none z-10">
@@ -228,19 +233,21 @@ export default function MapPage() {
                 </div>
               </div>
 
-              {sel && (
+              {sel && !editMode && (
                 <CollectorPopup
                   object={sel}
                   position={popupPos}
                   selectedSensorId={selectedSensorId}
-                  editMode={editMode}
-                  latInput={latInput}
-                  lngInput={lngInput}
-                  onLatChange={setLatInput}
-                  onLngChange={setLngInput}
-                  onApplyCoords={applyFormCoords}
+                  editMode={false}
+                  latInput=""
+                  lngInput=""
+                  onLatChange={() => {}}
+                  onLngChange={() => {}}
+                  onApplyCoords={() => {}}
                   onSelectSensor={setSelectedSensorId}
                   onClose={closePopup}
+                  onCreateTask={() => router.push('/requests')}
+                  onGoToTask={() => router.push('/requests')}
                   onPositionChange={(pos) => {
                     const box = mapBoxRef.current
                     if (!box) {
@@ -259,7 +266,7 @@ export default function MapPage() {
 
               {savedHint && (
                 <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-lg bg-surface-100 border border-surface-200 text-xs text-surface-800 shadow-lg">
-                  Координаты сохранены
+                  Объект сохранён
                 </div>
               )}
             </div>
@@ -299,14 +306,33 @@ export default function MapPage() {
             ) : (
               <div className="text-center py-8 text-surface-500 text-sm">
                 <Radio size={32} className="mx-auto mb-2 opacity-50" />
-                {sel
-                  ? 'Выберите датчик в окне на карте'
-                  : 'Выберите коллектор на карте, затем датчик'}
+                {editMode
+                  ? 'В режиме редактирования откройте объект на карте'
+                  : sel
+                    ? 'Выберите датчик в окне на карте'
+                    : 'Выберите коллектор на карте, затем датчик'}
               </div>
             )}
           </Card>
         </div>
       </div>
+
+      {editDraft && (
+        <>
+          <EditObjectModal
+            draft={editDraft}
+            saving={saving}
+            onChange={setEditDraft}
+            onCancel={handleCancelEdit}
+            onSave={handleSaveEdit}
+          />
+          {saveError && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg bg-danger text-white text-sm shadow-lg">
+              {saveError}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -338,6 +364,11 @@ function SensorDetails({
           {ss.label}
         </span>
         <span className="text-[11px] text-surface-500 truncate">в {collectorId}</span>
+      </div>
+
+      <div>
+        <div className="text-xs text-surface-500">Канал</div>
+        <div className="text-sm text-surface-900 font-mono break-all">{sensor.channel}</div>
       </div>
 
       <div>

@@ -40,6 +40,10 @@ type Props = {
   onSelectSensor: (sensorId: string) => void
   onClose: () => void
   onPositionChange: (pos: PopupPos) => void
+  /** заглушка: создать заявку */
+  onCreateTask?: () => void
+  /** заглушка: открыть существующую заявку */
+  onGoToTask?: () => void
 }
 
 export default function CollectorPopup({
@@ -54,11 +58,16 @@ export default function CollectorPopup({
   onApplyCoords,
   onSelectSensor,
   onClose,
-  onPositionChange
+  onPositionChange,
+  onCreateTask,
+  onGoToTask
 }: Props) {
   const status = deriveCollectorStatus(object.sensors)
   const st = COLLECTOR_STATUS_META[status]
   const onlineCount = object.sensors.filter((s) => s.status === 'online').length
+  const hasTask = Boolean(object.taskId)
+  /** ТО всегда ведёт к задаче; остальные — если заявка уже есть */
+  const showGoToTask = status === 'maintenance' || hasTask
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -113,51 +122,81 @@ export default function CollectorPopup({
       className="absolute z-20 w-[min(380px,calc(100%-1rem))] pointer-events-auto"
       style={{ left: position.x, top: position.y }}
     >
-      <div className="rounded-xl bg-surface-100/95 backdrop-blur border border-surface-200 shadow-xl shadow-surface-900/20 overflow-hidden">
+      <div className="rounded-xl bg-surface-100/95 backdrop-blur border border-surface-200 shadow-xl shadow-surface-900/20 overflow-hidden flex flex-col max-h-[min(520px,calc(100vh-6rem))]">
         <div
-          className="flex items-start gap-3 px-4 pt-3 pb-2 border-b border-surface-200 cursor-grab active:cursor-grabbing select-none touch-none"
+          className="shrink-0 border-b border-surface-200 cursor-grab active:cursor-grabbing select-none touch-none"
           onPointerDown={onHeaderPointerDown}
           onPointerMove={onHeaderPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
         >
-          <div className="mt-1 text-surface-400 shrink-0" aria-hidden>
-            <GripHorizontal size={16} />
-          </div>
-          <div className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${st.markerClass}`} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono font-bold text-surface-900">{object.id}</span>
-              <span className="text-xs px-1.5 py-0.5 rounded bg-surface-200 text-surface-700">{object.type}</span>
+          {/* Строка 1: название + закрыть */}
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+            <div className="text-surface-400 shrink-0" aria-hidden>
+              <GripHorizontal size={16} />
             </div>
-            <p className="text-xs text-surface-600 mt-0.5 truncate">{object.address}</p>
+            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${st.markerClass}`} />
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <span className="font-mono font-bold text-surface-900 truncate">{object.id}</span>
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-200 text-surface-700 truncate max-w-[40%]">
+                {object.type}
+              </span>
+            </div>
+            <button
+              type="button"
+              data-no-drag
+              onClick={onClose}
+              className="p-1 rounded-md hover:bg-surface-200 text-surface-500 hover:text-surface-900 transition cursor-pointer shrink-0"
+              aria-label="Закрыть"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <button
-            type="button"
-            data-no-drag
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-surface-200 text-surface-500 hover:text-surface-900 transition cursor-pointer"
-            aria-label="Закрыть"
-          >
-            <X size={16} />
-          </button>
+
+          {/* Строка 2: адрес */}
+          <div className="px-3 pb-2 pl-11">
+            <p className="text-xs text-surface-600 truncate" title={object.address}>
+              {object.address}
+            </p>
+          </div>
+
+          {/* Строка 3: крупная кнопка задачи */}
+          <div data-no-drag className="px-3 pb-3">
+            {showGoToTask ? (
+              <button
+                type="button"
+                onClick={onGoToTask}
+                className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold bg-surface-200 hover:bg-surface-300 text-surface-900 border border-surface-300 shadow-sm transition cursor-pointer"
+              >
+                Перейти к задаче
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onCreateTask}
+                className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white shadow-md shadow-primary-900/30 transition cursor-pointer"
+              >
+                Поставить задачу
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="px-4 py-3 space-y-3 max-h-[340px] overflow-y-auto">
+        <div className="px-4 py-3 space-y-3 overflow-y-auto min-h-0 flex-1">
           <p className="text-sm text-surface-700 leading-snug">{object.description}</p>
 
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5">
+            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5 min-h-[3.25rem] flex flex-col justify-center">
               <div className="text-[10px] uppercase tracking-wide text-surface-500">Статус</div>
-              <div className="text-xs font-semibold text-surface-900 mt-0.5">{st.label}</div>
+              <div className="text-xs font-semibold text-surface-900 mt-0.5 leading-tight">{st.label}</div>
             </div>
-            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5">
+            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5 min-h-[3.25rem] flex flex-col justify-center">
               <div className="text-[10px] uppercase tracking-wide text-surface-500">Длина</div>
-              <div className="text-xs font-semibold text-surface-900 mt-0.5">{object.len}</div>
+              <div className="text-xs font-semibold text-surface-900 mt-0.5 leading-tight">{object.len}</div>
             </div>
-            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5">
+            <div className="rounded-lg bg-surface-200/60 px-2 py-1.5 min-h-[3.25rem] flex flex-col justify-center">
               <div className="text-[10px] uppercase tracking-wide text-surface-500">Датчики</div>
-              <div className="text-xs font-semibold text-surface-900 mt-0.5">
+              <div className="text-xs font-semibold text-surface-900 mt-0.5 leading-tight">
                 {onlineCount}/{object.sensors.length}
               </div>
             </div>
@@ -191,7 +230,12 @@ export default function CollectorPopup({
                       <div className="text-sm font-medium text-surface-900 truncate">{s.name}</div>
                       <div className="text-[11px] text-surface-500 truncate">{s.place}</div>
                     </div>
-                    <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', ss.className)}>
+                    <span
+                      className={clsx(
+                        'text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 whitespace-nowrap',
+                        ss.className
+                      )}
+                    >
                       {ss.label}
                     </span>
                   </button>
@@ -239,3 +283,4 @@ export default function CollectorPopup({
     </div>
   )
 }
+

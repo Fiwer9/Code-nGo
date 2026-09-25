@@ -39,11 +39,12 @@ export const COLLECTOR_STATUS_META: Record<
   MapObjectStatus,
   { label: string; markerClass: string; color: string }
 > = {
-  ok: { label: 'В норме', markerClass: 'bg-success', color: '#22c55e' },
+  // color = hex метки на Яндекс.Карте; markerClass = тот же цвет в легенде (tailwind.config)
+  ok: { label: 'В норме', markerClass: 'bg-success', color: '#10b981' },
   warning: { label: 'Внимание', markerClass: 'bg-warning', color: '#f59e0b' },
   critical: { label: 'Критический', markerClass: 'bg-danger', color: '#ef4444' },
   offline: { label: 'Офлайн', markerClass: 'bg-surface-500', color: '#6b7280' },
-  maintenance: { label: 'ТО', markerClass: 'bg-info', color: '#3b82f6' }
+  maintenance: { label: 'ТО', markerClass: 'bg-info', color: '#06b6d4' }
 }
 
 /** Позиция попапа рядом с кликом, с подгонкой под края контейнера */

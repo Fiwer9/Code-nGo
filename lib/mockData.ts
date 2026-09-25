@@ -75,6 +75,8 @@ export type CollectorSensor = {
   lastCheck: string
   /** место внутри коллектора */
   place: string
+  /** канал датчика (СМВУ / шина данных) */
+  channel: string
   readings: SensorReading[]
 }
 
@@ -95,15 +97,23 @@ export type MapObject = {
   /** краткое описание для попапа */
   description: string
   sensors: CollectorSensor[]
+  /**
+   * ID связанной заявки (если есть).
+   * Для статуса ТО заявка предполагается всегда;
+   * для остальных — если задано, в UI «Перейти к задаче».
+   */
+  taskId?: string | null
 }
 
 function sensorsFor(
   collectorId: string,
-  items: Omit<CollectorSensor, 'id'>[]
+  items: Omit<CollectorSensor, 'id' | 'channel'>[]
 ): CollectorSensor[] {
+  const code = collectorId.replace(/[^\d]/g, '') || '0'
   return items.map((s, i) => ({
     ...s,
-    id: `${collectorId}-S${String(i + 1).padStart(2, '0')}`
+    id: `${collectorId}-S${String(i + 1).padStart(2, '0')}`,
+    channel: `SMVU/${code}/${s.kind}/${String(i + 1).padStart(2, '0')}`
   }))
 }
 
@@ -163,6 +173,7 @@ export const mapObjects: MapObject[] = [
     len: '1.2 км',
     address: 'ш. Энтузиастов',
     description: 'Узел у склада К6. Повышенное задымление на участке В-2.',
+    taskId: 'ZAY-2026-0142',
     sensors: sensorsFor('МК-2.2.2', [
       {
         name: 'Датчик задымления',
@@ -361,6 +372,7 @@ export const mapObjects: MapObject[] = [
     len: '1.5 км',
     address: 'Юг, Нагатинская',
     description: 'Насосная станция на плановом ТО до 20.09.',
+    taskId: 'ZAY-2026-0098',
     sensors: sensorsFor('МК-9.2.1', [
       {
         name: 'Насос №1',

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Map, BookOpen, BarChart3, FileText, Cpu,
-  Users, Link as LinkIcon, Shield, Settings, ChevronRight, Activity
+  Users, Link as LinkIcon, Shield, Settings, ChevronRight, Activity, ClipboardList
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -13,6 +13,7 @@ const mainNav = [
   { href: '/incidents',   label: 'Журнал инцидентов', icon: BookOpen },
   { href: '/predictions', label: 'Журнал прогнозов',  icon: Activity },
   { href: '/equipment',   label: 'Оборудование',      icon: Cpu },
+  { href: '/requests',    label: 'Заявки',            icon: ClipboardList },
   { href: '/analytics',   label: 'Аналитика',         icon: BarChart3 },
   { href: '/reports',     label: 'Отчёты',            icon: FileText }
 ]
@@ -47,22 +48,17 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-surface-100 border-r border-surface-200 h-screen sticky top-0 overflow-y-auto hidden md:block">
-      {/* Лого */}
-      <div className="p-5 border-b border-surface-200">
+    <aside className="w-64 bg-surface-100 border-r border-surface-200 h-screen sticky top-0 hidden md:flex md:flex-col">
+      <div className="p-5 border-b border-surface-200 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg">
             <Activity size={22} className="text-white" />
           </div>
-          <div>
-            <div className="font-bold text-surface-900">Москоллектор</div>
-            <div className="text-xs text-surface-600">Сервис ИИ · v2.1</div>
-          </div>
+          <div className="font-bold text-surface-900">Москоллектор</div>
         </div>
       </div>
 
-      {/* Основная навигация */}
-      <nav className="p-3 space-y-1">
+      <nav className="p-3 space-y-1 flex-1 overflow-y-auto min-h-0">
         <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 font-semibold">Основное</div>
         {mainNav.map(Item)}
 
@@ -70,13 +66,13 @@ export default function Sidebar() {
         {adminNav.map(Item)}
       </nav>
 
-      {/* Футер */}
-      <div className="p-4 mt-6 mx-3 rounded-lg bg-surface-200/50 border border-surface-300/30">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs text-surface-700">Система активна</span>
+      <div className="shrink-0 p-3 border-t border-surface-200">
+        <div className="px-3 py-2.5 rounded-lg bg-surface-200/50 border border-surface-300/30">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs text-surface-700">Система активна</span>
+          </div>
         </div>
-        <div className="text-xs text-surface-500">СМВУ · 825 км коллекторов</div>
       </div>
     </aside>
   )
