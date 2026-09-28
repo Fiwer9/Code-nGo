@@ -4,6 +4,8 @@ from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 from app.database import engine
 from app.routers.auth import router as auth_router
+from app.routers.roles import router as roles_router
+from app.routers.users import router as users_router
 from app.settings import settings
 
 # Инициализация основного приложения FastAPI.
@@ -26,6 +28,12 @@ if settings.force_https:
 
 # Регистрация модуля авторизации (/api/v1/auth)
 app.include_router(auth_router)
+# Регистрация модуля прав доступа (/api/v1/roles)
+app.include_router(roles_router)
+# Регистрация модуля управления пользователями (/api/v1/users)
+app.include_router(users_router)
+
+
 
 
 @app.get("/health", tags=["System"])

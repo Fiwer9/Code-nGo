@@ -98,9 +98,12 @@ class UserResponse(BaseModel):
     two_factor_enabled: bool
     created_at: datetime
     updated_at: datetime
+    roles: list["RoleResponse"] = Field(default_factory=list, description="Список назначенных ролей")
 
     model_config = {"from_attributes": True}
 
+from app.schemas.role import RoleResponse
+UserResponse.model_rebuild()
 
 class TokenResponse(BaseModel):
     """

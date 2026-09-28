@@ -14,7 +14,7 @@ from sqlalchemy import func, or_, select
 
 from app.core.security import hash_password
 from app.database import AsyncSessionLocal
-from app.models import UserModel
+from app.models import UserModel, RoleModel
 
 
 async def main() -> None:
@@ -78,11 +78,20 @@ async def main() -> None:
             mobile_number=mobile_number,
         )
         
+        # Автоматически назначаем роль Administrator при создании пользователя через CLI
+        admin_role = (
+            await db.execute(select(RoleModel).where(RoleModel.name == "Administrator"))
+        ).scalar_one_or_none()
+        if admin_role:
+            user.roles.append(admin_role)
+
         db.add(user)
         await db.commit()
         await db.refresh(user)
         
-        print(f"\n✅ Пользователь успешно создан: ID={user.id}, Login={user.login}")
+        roles_str = ", ".join([r.name for r in user.roles]) if user.roles else "без ролей"
+        print(f"\n✅ Пользователь успешно создан: ID={user.id}, Login={user.login}, Роли=[{roles_str}]")
+
 
 
 if __name__ == "__main__":

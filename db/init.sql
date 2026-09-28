@@ -95,3 +95,51 @@ CREATE TABLE IF NOT EXISTS predictions (
     status VARCHAR(50) DEFAULT 'new',
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- 6. Модуль прав доступа (RBAC)
+CREATE TABLE IF NOT EXISTS permissions (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id INT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    PRIMARY KEY (role_id, permission_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- Инициализация базовых прав и ролей
+INSERT INTO permissions (name, description) VALUES 
+('users:create', 'Создание пользователей'),
+('users:read', 'Просмотр пользователей'),
+('users:manage_roles', 'Назначение ролей'),
+('roles:read', 'Просмотр ролей'),
+('roles:manage', 'Управление ролями'),
+('objects:read', 'Просмотр объектов'),
+('predictions:read', 'Просмотр прогнозов ML')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles (name, description) VALUES 
+('Administrator', 'Полный доступ (все действия)'),
+('City Dispatcher', 'Диспетчер города'),
+('District Dispatcher', 'Диспетчер района (Инженер района)')
+ON CONFLICT DO NOTHING;
+
+-- Администратору даем все права (хотя в коде он обходит проверку, для порядка добавим)
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'Administrator'
+ON CONFLICT DO NOTHING;
+

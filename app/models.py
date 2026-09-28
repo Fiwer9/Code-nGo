@@ -13,10 +13,62 @@ from sqlalchemy import (
     Text,
     Time,
     func,
+    Table,
 )
+from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
 
 from app.database import Base
+
+
+# Таблицы для связи многие-ко-многим (Пользователи-Роли и Роли-Права)
+
+user_roles = Table(
+    "user_roles",
+    Base.metadata,
+    Column("user_id", BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class PermissionModel(Base):
+    """
+    ORM-модель для атомарных прав доступа (например, 'users:create', 'roles:manage').
+    """
+    __tablename__ = "permissions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+
+    # Обратная связь с ролями
+    roles = relationship("RoleModel", secondary=role_permissions, back_populates="permissions")
+
+
+class RoleModel(Base):
+    """
+    ORM-модель для ролей (групп) пользователей.
+    Обеспечивает гибкость настройки модуля ПД (прав доступа).
+    """
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+
+    # Права, привязанные к роли
+    permissions = relationship("PermissionModel", secondary=role_permissions, back_populates="roles", lazy="selectin")
+
+    
+    # Пользователи с данной ролью
+    users = relationship("UserModel", secondary=user_roles, back_populates="roles")
 
 
 class UserModel(Base):
@@ -54,6 +106,10 @@ class UserModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+    # Роли, назначенные пользователю (связь многие-ко-многим)
+    # Позволяет подгружать роли при запросе пользователя, используя selectinload
+    roles = relationship("RoleModel", secondary=user_roles, back_populates="users", lazy="selectin")
 
 
 class ObjectModel(Base):

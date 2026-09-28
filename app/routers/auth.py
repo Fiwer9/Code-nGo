@@ -14,7 +14,7 @@ from app.core.security import (
     verify_password,
 )
 from app.database import get_db
-from app.models import UserModel
+from app.models import UserModel, RoleModel
 from app.schemas.user import LoginRequest, TokenResponse, UserCreate, UserResponse
 from app.settings import settings
 
@@ -121,7 +121,6 @@ async def register_user(
             detail = "Пользователь с таким номером телефона уже существует"
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
-    # 5. Создание объекта пользователя (пароль извлекается из SecretStr через get_secret_value)
     new_user = UserModel(
         login=login,
         password_hash=hash_password(user_data.password.get_secret_value()),
@@ -133,6 +132,14 @@ async def register_user(
         mobile_number=user_data.mobile_number,
         email=email,
     )
+
+    # Если в системе еще нет пользователей, первый зарегистрированный пользователь
+    # автоматически получает роль Администратора (bootstrap initial admin)
+    users_count = await db.scalar(select(func.count(UserModel.id)))
+    if users_count == 0:
+        admin_role = (await db.execute(select(RoleModel).where(RoleModel.name == "Administrator"))).scalar_one_or_none()
+        if admin_role:
+            new_user.roles.append(admin_role)
 
     db.add(new_user)
     
