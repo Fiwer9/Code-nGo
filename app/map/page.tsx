@@ -13,7 +13,9 @@ import {
   Pencil,
   Crosshair,
   MapPin,
-  Radio
+  Radio,
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
 import Card from '@/components/Card'
 import CollectorPopup, { type PopupPos } from '@/components/CollectorPopup'
@@ -24,8 +26,11 @@ import {
   deriveCollectorStatus,
   placePopupNearPoint
 } from '@/lib/collectorStatus'
-import { loadMapObjects, persistMapObjects } from '@/lib/mapObjectsStore'
+import { applyMapOverrides, persistMapObjects } from '@/lib/mapObjectsStore'
 import { updateMapObject } from '@/lib/api/mapObjects'
+import { listEquipment } from '@/lib/api/monitoring'
+import { collectorsFromEquipment } from '@/lib/collectorsFromEquipment'
+import { ApiError } from '@/lib/api/types'
 import type { MapSelectPoint } from '@/components/YandexMap'
 import clsx from 'clsx'
 
@@ -85,7 +90,10 @@ function pickDefaultSensor(sensors: CollectorSensor[]) {
 export default function MapPage() {
   const router = useRouter()
   const mapBoxRef = useRef<HTMLDivElement>(null)
+  const [baseObjects, setBaseObjects] = useState<MapObject[]>([])
   const [objects, setObjects] = useState<MapObject[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedSensorId, setSelectedSensorId] = useState<string | null>(null)
   const [popupPos, setPopupPos] = useState<PopupPos>({ x: 24, y: 24 })
@@ -96,31 +104,45 @@ export default function MapPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedHint, setSavedHint] = useState(false)
 
-  useEffect(() => {
-    setObjects(loadMapObjects())
+  const reloadFromApi = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const data = await listEquipment({ limit: 500, offset: 0 })
+      const base = collectorsFromEquipment(data.items || [])
+      setBaseObjects(base)
+      setObjects(applyMapOverrides(base))
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : 'Не удалось загрузить коллекторы')
+      setBaseObjects([])
+      setObjects([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  // После создания заявки на другой странице — подтянуть taskId без F5
+  useEffect(() => {
+    reloadFromApi()
+  }, [reloadFromApi])
+
+  // После создания заявки / фокуса — перечитать оверрайды (taskId) поверх базы
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === 'visible') {
-        setObjects(loadMapObjects())
-      }
+      if (document.visibilityState !== 'visible') return
+      setObjects((prev) => {
+        const base = baseObjects.length > 0 ? baseObjects : prev
+        return applyMapOverrides(base)
+      })
     }
     document.addEventListener('visibilitychange', refresh)
     window.addEventListener('focus', refresh)
+    window.addEventListener('pageshow', refresh)
     return () => {
       document.removeEventListener('visibilitychange', refresh)
       window.removeEventListener('focus', refresh)
+      window.removeEventListener('pageshow', refresh)
     }
-  }, [])
-
-  // Клиентский переход на /map тоже перечитывает localStorage
-  useEffect(() => {
-    const onPageShow = () => setObjects(loadMapObjects())
-    window.addEventListener('pageshow', onPageShow)
-    return () => window.removeEventListener('pageshow', onPageShow)
-  }, [])
+  }, [baseObjects])
 
   const objectStatus = useCallback((o: MapObject) => deriveCollectorStatus(o.sensors), [])
 
@@ -192,7 +214,7 @@ export default function MapPage() {
       const saved = await updateMapObject(editDraft)
       setObjects((prev) => {
         const next = prev.map((o) => (o.id === saved.id ? cloneObject(saved) : o))
-        persistMapObjects(next)
+        persistMapObjects(next, baseObjects)
         return next
       })
       setEditDraft(null)
@@ -205,10 +227,23 @@ export default function MapPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="max-w-[1600px] mx-auto py-24 flex flex-col items-center gap-2 text-sm text-surface-600">
+        <Loader2 className="animate-spin" size={22} /> Загрузка карты…
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold text-surface-900">Карта объектов</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-surface-900">Карта объектов</h1>
+          <p className="text-surface-600 text-sm mt-1">
+            Коллекторы по parentId · координаты сгенерированы
+          </p>
+        </div>
         <button
           type="button"
           onClick={toggleEditMode}
@@ -222,6 +257,15 @@ export default function MapPage() {
           {editMode ? 'Редактирование вкл.' : 'Редактировать объекты'}
         </button>
       </div>
+
+      {loadError && (
+        <div className="flex items-center gap-2 text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
+          <AlertCircle size={16} /> {loadError}
+          <button type="button" className="underline ml-2" onClick={reloadFromApi}>
+            Повторить
+          </button>
+        </div>
+      )}
 
       {editMode && (
         <div className="rounded-lg border border-primary-600/40 bg-primary-600/10 px-4 py-2.5 text-sm text-surface-800 flex items-start gap-2">

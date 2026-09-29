@@ -6,6 +6,7 @@ import { ApiError } from '@/lib/api/types'
 import type { TicketCreateRequest, TicketDTO, UserDTO } from '@/lib/api/ticketTypes'
 import { createTicket, listAllowedObjects, listTicketUsers } from '@/lib/api/tickets'
 import { loadMapObjects, upsertMapObject } from '@/lib/mapObjectsStore'
+import { collectorGeo } from '@/lib/collectorGeo'
 import { ticketRoleLabel } from '@/lib/ticketAccess'
 import type { TicketRole } from '@/lib/api/ticketTypes'
 
@@ -111,13 +112,25 @@ export default function TicketCreateModal({
         watcher_ids: watcherIds
       }
       const created = await createTicket(payload)
-      // Связать объект на карте с новой заявкой (без смены статуса)
+      // Связать коллектор на карте с новой заявкой
       try {
+        const oid = created.object_id
         const objects = loadMapObjects()
-        const found = objects.find((o) => o.id === created.object_id)
-        if (found) {
-          upsertMapObject({ ...found, taskId: String(created.id) })
-        }
+        const found = objects.find((o) => o.id === oid)
+        const geo = collectorGeo(oid)
+        upsertMapObject({
+          ...(found || {
+            id: oid,
+            type: 'Коллектор',
+            len: '—',
+            lat: geo.lat,
+            lng: geo.lng,
+            address: geo.address,
+            description: `Коллектор ${oid}`,
+            sensors: []
+          }),
+          taskId: String(created.id)
+        })
       } catch {
         /* карта локальная — не блокируем создание */
       }
