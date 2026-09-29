@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Activity, Lock, User as UserIcon, ShieldCheck, AlertCircle } from 'lucide-react'
+import { Activity, Lock, User as UserIcon, AlertCircle } from 'lucide-react'
 import { useAuth, ApiError } from '@/components/AuthProvider'
 
 export default function LoginPage() {
@@ -46,7 +46,7 @@ export default function LoginPage() {
         <div className="bg-surface-100 border border-surface-200 rounded-2xl p-8 shadow-2xl shadow-black/50 animate-fadeIn">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-surface-900">Вход в систему</h2>
-            <p className="text-sm text-surface-600 mt-1">Логин или email и пароль</p>
+            <p className="text-sm text-surface-600 mt-1">Имя пользователя и пароль</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -57,7 +57,7 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1.5">Логин или email</label>
+              <label className="block text-sm font-medium text-surface-700 mb-1.5">Имя пользователя</label>
               <div className="relative">
                 <UserIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500" />
                 <input
@@ -65,7 +65,7 @@ export default function LoginPage() {
                   value={identifier}
                   onChange={e => setIdentifier(e.target.value)}
                   className="w-full bg-surface-200 border border-surface-300 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                  placeholder="login или user@moskollector.ru"
+                  placeholder="Имя пользователя"
                   autoComplete="username"
                   required
                   minLength={3}
@@ -97,15 +97,6 @@ export default function LoginPage() {
               {loading ? 'Вход...' : 'Войти'}
             </button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-surface-200 flex items-center justify-center gap-2 text-xs text-surface-500">
-            <ShieldCheck size={14} />
-            <span>JWT · RBAC · Argon2id</span>
-          </div>
-        </div>
-
-        <div className="text-center mt-6 text-xs text-surface-500">
-          © 2026 АО «Москоллектор» · Версия 2.1.0
         </div>
       </div>
     </div>

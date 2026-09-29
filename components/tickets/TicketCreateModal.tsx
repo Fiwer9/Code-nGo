@@ -4,11 +4,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { ApiError } from '@/lib/api/types'
 import type { TicketCreateRequest, TicketDTO, UserDTO } from '@/lib/api/ticketTypes'
-import { createTicket, listAllowedObjects, listTicketUsers } from '@/lib/api/tickets'
+import {
+  createTicket,
+  listAllowedObjects,
+  listTicketObjects,
+  listTicketUsers
+} from '@/lib/api/tickets'
 import { loadMapObjects, upsertMapObject } from '@/lib/mapObjectsStore'
 import { collectorGeo } from '@/lib/collectorGeo'
+import { collectorsFromEquipment } from '@/lib/collectorsFromEquipment'
+import { getEquipmentCached, peekEquipmentCache } from '@/lib/equipmentCache'
 import { ticketRoleLabel } from '@/lib/ticketAccess'
 import type { TicketRole } from '@/lib/api/ticketTypes'
+
+type ObjectOption = {
+  id: string
+  label: string
+}
 
 type Props = {
   open: boolean
@@ -17,8 +29,20 @@ type Props = {
   defaultObjectId?: string
   defaultTitle?: string
   defaultWarningSource?: string
-  /** ADMIN может выбрать начальную стадию — UI оставляет UNPROCESSED по умолчанию */
   canPickAssignees?: boolean
+}
+
+function buildObjectOptions(ids: string[]): ObjectOption[] {
+  const unique = Array.from(new Set(ids.map((id) => String(id).trim()).filter(Boolean)))
+  return unique
+    .map((id) => {
+      const geo = collectorGeo(id)
+      return {
+        id,
+        label: `${id} · ${geo.address}`
+      }
+    })
+    .sort((a, b) => a.id.localeCompare(b.id, 'ru', { numeric: true }))
 }
 
 export default function TicketCreateModal({
@@ -37,7 +61,7 @@ export default function TicketCreateModal({
   const [warningSource, setWarningSource] = useState(defaultWarningSource)
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [watcherIds, setWatcherIds] = useState<string[]>([])
-  const [objects, setObjects] = useState<string[]>([])
+  const [objectOptions, setObjectOptions] = useState<ObjectOption[]>([])
   const [users, setUsers] = useState<UserDTO[]>([])
   const [loadingMeta, setLoadingMeta] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -58,15 +82,42 @@ export default function TicketCreateModal({
     ;(async () => {
       setLoadingMeta(true)
       try {
-        const [allowed, staff] = await Promise.all([
+        const [allowed, ticketObjects, equipment, staff] = await Promise.all([
           listAllowedObjects().catch(() => [] as string[]),
-          canPickAssignees ? listTicketUsers().catch(() => [] as UserDTO[]) : Promise.resolve([] as UserDTO[])
+          listTicketObjects()
+            .then((rows) => rows.map((r) => r.object_id).filter(Boolean))
+            .catch(() => [] as string[]),
+          getEquipmentCached()
+            .then((data) => collectorsFromEquipment(data.items || []).map((c) => c.id))
+            .catch(() => {
+              const peek = peekEquipmentCache()
+              return peek ? collectorsFromEquipment(peek.items).map((c) => c.id) : ([] as string[])
+            }),
+          canPickAssignees
+            ? listTicketUsers().catch(() => [] as UserDTO[])
+            : Promise.resolve([] as UserDTO[])
         ])
+
         if (cancelled) return
-        setObjects(allowed)
+
+        // Коллекторы из мониторинга — основной список; Ticket Service дополняет
+        const ids = [...equipment, ...allowed, ...ticketObjects]
+        if (defaultObjectId) ids.push(defaultObjectId)
+        // Локальные правки карты (если уже есть)
+        try {
+          for (const o of loadMapObjects()) ids.push(o.id)
+        } catch {
+          /* ignore */
+        }
+
+        const options = buildObjectOptions(ids)
+        setObjectOptions(options)
         setUsers(staff.filter((u) => u.is_active !== false))
-        if (defaultObjectId && !allowed.includes(defaultObjectId) && allowed.length) {
-          // оставляем default — сервер сам проверит доступ
+
+        if (defaultObjectId) {
+          setObjectId(defaultObjectId)
+        } else if (options.length === 1) {
+          setObjectId(options[0].id)
         }
       } finally {
         if (!cancelled) setLoadingMeta(false)
@@ -96,6 +147,11 @@ export default function TicketCreateModal({
     e.preventDefault()
     setSaving(true)
     setError(null)
+    if (!objectId.trim()) {
+      setError('Выберите объект (коллектор)')
+      setSaving(false)
+      return
+    }
     if (assigneeIds.length === 0) {
       setError('Укажите хотя бы одного исполнителя')
       setSaving(false)
@@ -112,11 +168,10 @@ export default function TicketCreateModal({
         watcher_ids: watcherIds
       }
       const created = await createTicket(payload)
-      // Связать коллектор на карте с новой заявкой
       try {
         const oid = created.object_id
-        const objects = loadMapObjects()
-        const found = objects.find((o) => o.id === oid)
+        const mapObjs = loadMapObjects()
+        const found = mapObjs.find((o) => o.id === oid)
         const geo = collectorGeo(oid)
         upsertMapObject({
           ...(found || {
@@ -192,32 +247,36 @@ export default function TicketCreateModal({
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-surface-700">Объект *</span>
-            {objects.length > 0 ? (
-              <select
-                required
-                value={objectId}
-                onChange={(e) => setObjectId(e.target.value)}
-                className="mt-1.5 w-full px-3 py-2 rounded-lg bg-surface-50 border border-surface-200 text-surface-900 text-sm"
-              >
-                <option value="">Выберите объект</option>
-                {defaultObjectId && !objects.includes(defaultObjectId) && (
-                  <option value={defaultObjectId}>{defaultObjectId}</option>
-                )}
-                {objects.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                required
-                value={objectId}
-                onChange={(e) => setObjectId(e.target.value)}
-                className="mt-1.5 w-full px-3 py-2 rounded-lg bg-surface-50 border border-surface-200 text-surface-900 text-sm"
-                placeholder="OBJ-101 или ID объекта"
-              />
+            <span className="text-sm font-medium text-surface-700">Коллектор *</span>
+            <select
+              required
+              value={objectId}
+              onChange={(e) => setObjectId(e.target.value)}
+              disabled={loadingMeta && objectOptions.length === 0}
+              className="mt-1.5 w-full px-3 py-2 rounded-lg bg-surface-50 border border-surface-200 text-surface-900 text-sm disabled:opacity-60"
+            >
+              <option value="">Выберите коллектор</option>
+              {defaultObjectId && !objectOptions.some((o) => o.id === defaultObjectId) && (
+                <option value={defaultObjectId}>
+                  {defaultObjectId} · {collectorGeo(defaultObjectId).address}
+                </option>
+              )}
+              {objectOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            {!loadingMeta && objectOptions.length === 0 && (
+              <p className="mt-1.5 text-xs text-warning">
+                Список коллекторов пуст — откройте вкладку «Оборудование» или «Карта», чтобы
+                подтянуть данные, и создайте заявку снова.
+              </p>
+            )}
+            {!loadingMeta && objectOptions.length > 0 && (
+              <p className="mt-1 text-xs text-surface-500">
+                Доступно объектов: {objectOptions.length}
+              </p>
             )}
           </label>
 

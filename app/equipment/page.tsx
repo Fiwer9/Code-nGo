@@ -1,16 +1,25 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Cpu, Thermometer, Wind, Droplets, Gauge, Search, AlertCircle, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  Cpu,
+  Thermometer,
+  Wind,
+  Droplets,
+  Gauge,
+  Search,
+  AlertCircle,
+  Loader2,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react'
 import Card from '@/components/Card'
 import DataTable from '@/components/DataTable'
 import { ApiError } from '@/lib/api/types'
-import type { EquipmentItem } from '@/lib/api/monitoringTypes'
-import {
-  collectorIdOfEquipment,
-  computeEquipmentStats
-} from '@/lib/api/monitoring'
-import { getEquipmentCached, peekEquipmentCache } from '@/lib/equipmentCache'
+import type { EquipmentItem, EquipmentStats } from '@/lib/api/monitoringTypes'
+import { collectorIdOfEquipment, computeEquipmentStats, listEquipment } from '@/lib/api/monitoring'
+
+const PAGE_SIZE = 50
 
 const iconMap: Record<string, typeof Cpu> = {
   temperature: Thermometer,
@@ -41,59 +50,82 @@ function statusKey(status: string): string {
 
 export default function EquipmentPage() {
   const [search, setSearch] = useState('')
-  const cached = peekEquipmentCache()
-  const [items, setItems] = useState<EquipmentItem[]>(cached?.items ?? [])
-  const [loading, setLoading] = useState(!cached)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [items, setItems] = useState<EquipmentItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<EquipmentStats | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(1)
+    }, search ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [search])
+
   const load = useCallback(async () => {
-    const q = search.trim()
-    if (!q && !peekEquipmentCache()) setLoading(true)
-    else if (q) setLoading(true)
+    setLoading(true)
     setError(null)
     try {
-      const data = await getEquipmentCached({
-        search: q || undefined,
-        onUpdate: (fresh) => {
-          if (!search.trim()) setItems(fresh.items || [])
-        }
+      const offset = (page - 1) * PAGE_SIZE
+      const data = await listEquipment({
+        search: debouncedSearch || undefined,
+        limit: PAGE_SIZE,
+        offset
       })
-      setItems(data.items || [])
+      const pageItems = data.items || []
+      setItems(pageItems)
+      // pagination.total — размер выборки; если бэк завышает stats.total, для страниц берём total
+      const reported = data.pagination?.total
+      setTotal(
+        typeof reported === 'number' && reported >= 0
+          ? reported
+          : offset + pageItems.length + (pageItems.length === PAGE_SIZE ? PAGE_SIZE : 0)
+      )
+      // KPI статусов — из stats ответа (по всей выборке), fallback — текущая страница
+      setStats(data.stats ?? computeEquipmentStats(pageItems))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось загрузить оборудование')
-      if (!peekEquipmentCache() || q) setItems([])
+      setItems([])
+      setTotal(0)
+      setStats(null)
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [debouncedSearch, page])
 
   useEffect(() => {
-    const t = setTimeout(load, search ? 300 : 0)
-    return () => clearTimeout(t)
-  }, [load, search])
+    load()
+  }, [load])
 
-  const stats = useMemo(() => computeEquipmentStats(items), [items])
-  const collectors = useMemo(() => {
-    const set = new Set(items.map(collectorIdOfEquipment))
-    return set.size
-  }, [items])
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const from = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
+  const to = Math.min(safePage * PAGE_SIZE, total)
+  const pageCollectors = new Set(items.map(collectorIdOfEquipment)).size
 
   const kpi = [
-    { label: 'Всего датчиков', value: stats.total },
-    { label: 'Коллекторов', value: collectors },
-    { label: 'В сети', value: stats.online },
-    { label: 'Внимание', value: stats.warning },
-    { label: 'Не в сети', value: stats.offline },
-    { label: 'На ТО', value: stats.maintenance }
+    { label: 'Всего датчиков', value: total },
+    { label: 'На странице', value: items.length },
+    { label: 'Коллекторов (стр.)', value: pageCollectors },
+    { label: 'В сети', value: stats?.online ?? '—' },
+    { label: 'Внимание', value: stats?.warning ?? '—' },
+    { label: 'Не в сети', value: stats?.offline ?? '—' }
   ]
+
+  const goTo = (p: number) => {
+    setPage(Math.min(Math.max(1, p), totalPages))
+  }
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-surface-900">Оборудование</h1>
         <p className="text-surface-600 mt-1">
-          Реестр датчиков по коллекторам (ID родителя = ID коллектора). Список кешируется;
-          статусы обновляются в фоне.
+          Реестр датчиков по коллекторам · по {PAGE_SIZE} на странице
         </p>
       </div>
 
@@ -131,61 +163,94 @@ export default function EquipmentPage() {
             <Loader2 className="animate-spin" size={22} /> Загрузка…
           </div>
         ) : (
-          <DataTable
-            data={items}
-            columns={[
-              {
-                key: 'id',
-                header: 'ID датчика',
-                render: (r: EquipmentItem) => <span className="font-mono text-xs">{r.id}</span>
-              },
-              {
-                key: 'parent',
-                header: 'Коллектор',
-                render: (r: EquipmentItem) => (
-                  <span className="font-mono font-medium">{collectorIdOfEquipment(r)}</span>
-                )
-              },
-              {
-                key: 'type',
-                header: 'Тип',
-                render: (r: EquipmentItem) => {
-                  const kind = (r.sensor_type || r.type || '').toLowerCase()
-                  const Icon =
-                    Object.entries(iconMap).find(([k]) => kind.includes(k))?.[1] || Cpu
-                  return (
-                    <div className="flex items-center gap-2">
-                      <Icon size={16} className="text-primary-400" />
-                      <span>{r.sensor_type || r.type}</span>
-                    </div>
+          <>
+            <DataTable
+              data={items}
+              columns={[
+                {
+                  key: 'id',
+                  header: 'ID датчика',
+                  render: (r: EquipmentItem) => (
+                    <span className="font-mono text-xs">{r.id}</span>
                   )
-                }
-              },
-              { key: 'system_type', header: 'Система' },
-              {
-                key: 'status',
-                header: 'Статус',
-                render: (r: EquipmentItem) => {
-                  const key = statusKey(r.status)
-                  const s = statusLabels[key] || {
-                    label: r.status,
-                    color: 'bg-surface-200 text-surface-700'
+                },
+                {
+                  key: 'parent',
+                  header: 'Коллектор',
+                  render: (r: EquipmentItem) => (
+                    <span className="font-mono font-medium">{collectorIdOfEquipment(r)}</span>
+                  )
+                },
+                {
+                  key: 'type',
+                  header: 'Тип',
+                  render: (r: EquipmentItem) => {
+                    const kind = (r.sensor_type || r.type || '').toLowerCase()
+                    const Icon =
+                      Object.entries(iconMap).find(([k]) => kind.includes(k))?.[1] || Cpu
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Icon size={16} className="text-primary-400" />
+                        <span>{r.sensor_type || r.type}</span>
+                      </div>
+                    )
                   }
-                  return (
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.color}`}>
-                      {s.label}
-                    </span>
-                  )
+                },
+                { key: 'system_type', header: 'Система' },
+                {
+                  key: 'status',
+                  header: 'Статус',
+                  render: (r: EquipmentItem) => {
+                    const key = statusKey(r.status)
+                    const s = statusLabels[key] || {
+                      label: r.status,
+                      color: 'bg-surface-200 text-surface-700'
+                    }
+                    return (
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.color}`}>
+                        {s.label}
+                      </span>
+                    )
+                  }
+                },
+                {
+                  key: 'lastCheck',
+                  header: 'Проверка',
+                  render: (r: EquipmentItem) =>
+                    r.lastCheck ? new Date(r.lastCheck).toLocaleString('ru-RU') : '—'
                 }
-              },
-              {
-                key: 'lastCheck',
-                header: 'Проверка',
-                render: (r: EquipmentItem) =>
-                  r.lastCheck ? new Date(r.lastCheck).toLocaleString('ru-RU') : '—'
-              }
-            ]}
-          />
+              ]}
+            />
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-surface-200 pt-4">
+              <div className="text-sm text-surface-600">
+                {total === 0
+                  ? 'Нет записей'
+                  : `Показано ${from}–${to} из ${total}`}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safePage <= 1 || loading}
+                  onClick={() => goTo(safePage - 1)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-surface-200 hover:bg-surface-300 disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} /> Назад
+                </button>
+                <span className="text-sm font-medium text-surface-800 tabular-nums px-2">
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages || loading}
+                  onClick={() => goTo(safePage + 1)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-surface-200 hover:bg-surface-300 disabled:opacity-40"
+                >
+                  Вперёд <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </Card>
     </div>

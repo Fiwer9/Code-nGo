@@ -317,7 +317,7 @@ export default function TicketDetailPage() {
             type="button"
             onClick={handleClose}
             disabled={saving}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-success/15 text-success hover:bg-success/25 disabled:opacity-40"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-danger/15 text-danger hover:bg-danger/25 disabled:opacity-40"
           >
             <CheckCircle2 size={16} /> Закрыть
           </button>
