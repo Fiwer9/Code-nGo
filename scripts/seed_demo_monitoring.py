@@ -72,18 +72,19 @@ async def seed_demo():
         if existing_preds.scalars().first():
             logger.info("Predictions already seeded.")
         else:
+            import uuid
             logger.info("Seeding predictions...")
             risk_types = ["Подтопление", "Пожар", "Несанк. доступ", "Отказ датчика", "Газовая утечка"]
-            models = ["FloodNet v3.2", "FirePredict v2.1", "AccessGuard v1.8", "SensorHealth v4.0", "GasLeak v2.4"]
+            models = ["catboost_model.pkl", "model_metadata.pkl"]
             
             for i in range(1, 16):
                 ch = random.choice(channels) if channels else None
                 obj = random.choice(objects)
                 rtype = random.choice(risk_types)
-                mod = models[risk_types.index(rtype)]
+                mod = random.choice(models)
                 
                 pred = PredictionModel(
-                    public_id=f"P-{100 + i}",
+                    public_id=str(uuid.uuid4()),
                     channel_id=ch.id if ch else None,
                     object_id=obj.id,
                     risk_type=rtype,
@@ -121,7 +122,7 @@ async def seed_demo():
                 linked_pred = random.choice(preds) if preds and random.random() > 0.5 else None
                 
                 inc = IncidentModel(
-                    public_id=f"INC-2026-{800 + i}",
+                    public_id=str(uuid.uuid4()),
                     prediction_id=linked_pred.id if linked_pred else None,
                     object_id=obj.id,
                     channel_id=ch.id if ch else None,
