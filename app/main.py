@@ -6,6 +6,9 @@ from app.database import engine
 from app.routers.auth import router as auth_router
 from app.routers.roles import router as roles_router
 from app.routers.users import router as users_router
+from app.routers.equipment import router as equipment_router
+from app.routers.predictions import router as predictions_router
+from app.routers.incidents import router as incidents_router
 from app.settings import settings
 
 # Инициализация основного приложения FastAPI.
@@ -32,9 +35,10 @@ app.include_router(auth_router)
 app.include_router(roles_router)
 # Регистрация модуля управления пользователями (/api/v1/users)
 app.include_router(users_router)
-
-
-
+# Регистрация оборудования, прогнозов, инцидентов
+app.include_router(equipment_router)
+app.include_router(predictions_router)
+app.include_router(incidents_router)
 
 @app.get("/health", tags=["System"])
 async def health() -> dict[str, str]:

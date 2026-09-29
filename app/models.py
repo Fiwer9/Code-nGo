@@ -14,6 +14,7 @@ from sqlalchemy import (
     Time,
     func,
     Table,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
@@ -129,6 +130,8 @@ class ObjectModel(Base):
     object_type = Column(String, nullable=True)
     disp_name = Column(String, nullable=True)
     geometry = Column(Geometry("GEOMETRY", srid=4326), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
 
 
 class ChannelModel(Base):
@@ -145,17 +148,29 @@ class ChannelModel(Base):
     sensor_type = Column(String, nullable=True)
     tag = Column(String, nullable=True)
     name = Column(String, nullable=True)
-    object_id = Column(Integer, ForeignKey("objects.id"), nullable=True)
+    object_id = Column(Integer, ForeignKey("objects.id", ondelete="SET NULL"), nullable=True)
+
+
+class SensorStateModel(Base):
+    """
+    Справочник состояний датчиков.
+    """
+    __tablename__ = "sensor_states"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    sensor_type = Column(String(150), nullable=False)
+    state_set_id = Column(Integer, nullable=False)
+    state_name = Column(String(255), nullable=False)
+    is_alarm = Column(Boolean, nullable=False, default=False)
+    
+    __table_args__ = (
+        UniqueConstraint("sensor_type", "state_set_id", "state_name", name="uq_sensor_state"),
+    )
 
 
 class SensorLogModel(Base):
     """
     ORM-модель для телеметрии и журнала событий датчиков.
-    
-    Особенности архитектуры:
-    - На уровне базы данных таблица `sensor_logs` является СЕКЦИОНИРОВАННОЙ (партиционированной) по дате.
-    - Фактический Primary Key в PostgreSQL на партиционированных таблицах должен включать ключ партиционирования.
-    - Поле `id` помечено `primary_key=True` исключительно для корректной работы маппера SQLAlchemy ORM.
     """
     __tablename__ = "sensor_logs"
 
@@ -171,21 +186,38 @@ class SensorLogModel(Base):
 class PredictionModel(Base):
     """
     ORM-модель результатов предиктивной аналитики (ML-модуль).
-    
-    Служит для хранения прогнозов рисков и инцидентов на объектах/каналах.
-    - `risk_score`: вероятность/оценка риска в диапазоне от 0.0 до 1.0.
-    - `horizon_hours`: горизонт прогнозирования (например, риск аварии в ближайшие 24 часа).
-    - `features_explanation`: JSON-поле с интерпретацией факторов риска (SHAP values / Feature Importance) 
-      для отображения понятной аналитики пользователю.
     """
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    public_id = Column(String(50), unique=True, nullable=True)
     channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=True)
     risk_type = Column(String(100), nullable=False)
     risk_score = Column(Float, nullable=False)
     horizon_hours = Column(Integer, nullable=False, default=24)
+    model_name = Column(String(100), nullable=True)
+    model_version = Column(String(50), nullable=True)
+    inference_seconds = Column(Float, nullable=True)
     features_explanation = Column(JSON, nullable=True)
-    status = Column(String(50), nullable=False, default="new")
+    status = Column(String(50), nullable=False, default="pending")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class IncidentModel(Base):
+    """
+    Журнал инцидентов.
+    """
+    __tablename__ = "incidents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    public_id = Column(String(50), unique=True, nullable=False)
+    prediction_id = Column(Integer, ForeignKey("predictions.id", ondelete="SET NULL"), nullable=True)
+    object_id = Column(Integer, ForeignKey("objects.id", ondelete="SET NULL"), nullable=True)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
+    incident_type = Column(String(100), nullable=False)
+    probability = Column(Float, nullable=True)
+    status = Column(String(50), nullable=False, default="info")
+    occurred_at = Column(DateTime, nullable=False, server_default=func.now())
+    location = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now())

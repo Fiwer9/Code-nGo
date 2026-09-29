@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS objects (
     object_type VARCHAR(100),
     disp_name VARCHAR(255),
     geometry GEOMETRY(Geometry, 4326),
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -64,6 +66,16 @@ CREATE TABLE IF NOT EXISTS channels (
     tag VARCHAR(255),
     name VARCHAR(255),
     object_id INT REFERENCES objects(id) ON DELETE SET NULL
+);
+
+-- 3.5 Справочник состояний датчиков
+CREATE TABLE IF NOT EXISTS sensor_states (
+    id BIGSERIAL PRIMARY KEY,
+    sensor_type VARCHAR(150) NOT NULL,
+    state_set_id INT NOT NULL,
+    state_name VARCHAR(255) NOT NULL,
+    is_alarm BOOLEAN DEFAULT FALSE,
+    UNIQUE(sensor_type, state_set_id, state_name)
 );
 
 -- 4. Партиционированный журнал событий (под файл 1.3 ГБ)
@@ -86,15 +98,40 @@ CREATE INDEX IF NOT EXISTS idx_sensor_logs_2026_channel_time
 -- 5. Прогнозы ML
 CREATE TABLE IF NOT EXISTS predictions (
     id SERIAL PRIMARY KEY,
-    channel_id INT REFERENCES channels(id),
-    object_id INT REFERENCES objects(id),
+    public_id VARCHAR(50) UNIQUE,
+    channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+    object_id INT REFERENCES objects(id) ON DELETE CASCADE,
     risk_type VARCHAR(100) NOT NULL,
     risk_score FLOAT NOT NULL,
     horizon_hours INT DEFAULT 24,
+    model_name VARCHAR(100),
+    model_version VARCHAR(50),
+    inference_seconds FLOAT,
     features_explanation JSONB,
-    status VARCHAR(50) DEFAULT 'new',
+    status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_predictions_status ON predictions(status);
+CREATE INDEX IF NOT EXISTS idx_predictions_created_at ON predictions(created_at);
+
+-- 5.5 Инциденты
+CREATE TABLE IF NOT EXISTS incidents (
+    id SERIAL PRIMARY KEY,
+    public_id VARCHAR(50) UNIQUE NOT NULL,
+    prediction_id INT REFERENCES predictions(id) ON DELETE SET NULL,
+    object_id INT REFERENCES objects(id) ON DELETE CASCADE,
+    channel_id INT REFERENCES channels(id) ON DELETE CASCADE,
+    incident_type VARCHAR(100) NOT NULL,
+    probability FLOAT,
+    status VARCHAR(50) DEFAULT 'info',
+    occurred_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    location VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
+CREATE INDEX IF NOT EXISTS idx_incidents_occurred_at ON incidents(occurred_at);
 
 -- 6. Модуль прав доступа (RBAC)
 CREATE TABLE IF NOT EXISTS permissions (
