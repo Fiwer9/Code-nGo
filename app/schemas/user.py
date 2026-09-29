@@ -116,3 +116,23 @@ class TokenResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
     expires_in: int = Field(description="Время жизни токена в секундах")
     user: UserResponse = Field(description="Данные авторизованного пользователя")
+
+class UserListResponseItem(UserResponse):
+    """Элемент списка пользователей для таблицы, возвращает строковые роли для удобства."""
+    role_name: str | None = Field(default=None, description="Название основной роли (для таблицы)")
+
+class UserStats(BaseModel):
+    total: int
+    active: int
+    inactive: int
+    roles_count: int
+
+class UserPagination(BaseModel):
+    limit: int
+    offset: int
+    total: int
+
+class UserListResponse(BaseModel):
+    items: list[UserListResponseItem]
+    stats: UserStats
+    pagination: UserPagination
