@@ -170,7 +170,14 @@ def main():
         return
         
     try:
-        data_dir = 'data'
+        data_dir = os.environ.get("DATA_DIR", "data")
+        if not os.path.exists(data_dir):
+            if os.path.exists("/app/data"):
+                data_dir = "/app/data"
+            else:
+                logger.error(f"Папка с данными не найдена: ни '{data_dir}', ни '/app/data'. Убедитесь, что смонтирован том ./data:/app/data или скопируйте файлы внутрь контейнера.")
+                return
+
         objects_file = get_file_ignore_case(data_dir, 'справочник_объектов')
         channels_file = get_file_ignore_case(data_dir, 'справочник_каналов')
         states_file = get_file_ignore_case(data_dir, 'справочник_состояний')
