@@ -14,6 +14,7 @@ import { fetchMe, login as apiLogin, logout as apiLogout } from '@/lib/api/auth'
 import { clearSession, getStoredToken, getStoredUserJson, saveSession } from '@/lib/api/client'
 import type { LoginRequest, User } from '@/lib/api/types'
 import { ApiError } from '@/lib/api/types'
+import { canAccessAdmin, hasPermission } from '@/lib/permissions'
 
 type AuthContextValue = {
   user: User | null
@@ -21,6 +22,8 @@ type AuthContextValue = {
   login: (payload: LoginRequest) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
+  canAccessAdmin: boolean
+  hasPermission: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -101,6 +104,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (user && pathname === '/login') {
       router.replace('/dashboard')
+      return
+    }
+    if (user && pathname.startsWith('/admin') && !canAccessAdmin(user)) {
+      router.replace('/dashboard')
     }
   }, [loading, user, pathname, router])
 
@@ -116,7 +123,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router])
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, refreshUser }),
+    () => ({
+      user,
+      loading,
+      login,
+      logout,
+      refreshUser,
+      canAccessAdmin: canAccessAdmin(user),
+      hasPermission: (permission: string) => hasPermission(user, permission)
+    }),
     [user, loading, login, logout, refreshUser]
   )
 

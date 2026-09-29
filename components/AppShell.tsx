@@ -7,8 +7,9 @@ import { useAuth } from '@/components/AuthProvider'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { loading, user } = useAuth()
+  const { loading, user, canAccessAdmin } = useAuth()
   const isLogin = pathname === '/login'
+  const isAdminRoute = pathname.startsWith('/admin')
 
   if (isLogin) {
     return <>{children}</>
@@ -18,6 +19,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-50">
         <div className="text-sm text-surface-600">Загрузка…</div>
+      </div>
+    )
+  }
+
+  if (isAdminRoute && !canAccessAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-50">
+        <div className="text-sm text-surface-600">Перенаправление…</div>
       </div>
     )
   }

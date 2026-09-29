@@ -18,7 +18,7 @@ function shortName(user: { name: string; surname: string }) {
 
 export default function Header() {
   const { theme, toggle } = useTheme()
-  const { user, logout } = useAuth()
+  const { user, logout, canAccessAdmin } = useAuth()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -154,14 +154,16 @@ export default function Header() {
                 </div>
                 <div className="text-xs text-surface-500 truncate">{user?.email}</div>
               </div>
-              <Link
-                href="/admin/users"
-                className="flex items-center gap-3 p-3 hover:bg-surface-200/50"
-                onClick={() => setShowUser(false)}
-              >
-                <User size={16} />
-                <span className="text-sm">Пользователи</span>
-              </Link>
+              {canAccessAdmin && (
+                <Link
+                  href="/admin/users"
+                  className="flex items-center gap-3 p-3 hover:bg-surface-200/50"
+                  onClick={() => setShowUser(false)}
+                >
+                  <User size={16} />
+                  <span className="text-sm">Пользователи</span>
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => { setShowUser(false); logout() }}

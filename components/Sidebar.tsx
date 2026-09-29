@@ -6,6 +6,7 @@ import {
   Users, Link as LinkIcon, ChevronRight, Activity, ClipboardList
 } from 'lucide-react'
 import clsx from 'clsx'
+import { useAuth } from '@/components/AuthProvider'
 
 const mainNav = [
   { href: '/dashboard',   label: 'Дашборд',           icon: LayoutDashboard },
@@ -25,6 +26,7 @@ const adminNav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { canAccessAdmin } = useAuth()
 
   const Item = ({ href, label, icon: Icon }: any) => {
     const active = pathname === href
@@ -60,8 +62,12 @@ export default function Sidebar() {
         <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 font-semibold">Основное</div>
         {mainNav.map(Item)}
 
-        <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 mt-4 font-semibold">Администратор</div>
-        {adminNav.map(Item)}
+        {canAccessAdmin && (
+          <>
+            <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 mt-4 font-semibold">Администратор</div>
+            {adminNav.map(Item)}
+          </>
+        )}
       </nav>
 
       <div className="shrink-0 p-3 border-t border-surface-200">
