@@ -52,6 +52,53 @@ cp .env.example .env.local
 | `npm run build`   | Production-сборка                 |
 | `npm run start`   | Запуск собранного приложения      |
 
+## Docker
+
+Сборка использует [standalone](https://nextjs.org/docs/app/api-reference/next-config-js/output) (`output: 'standalone'` в `next.config.js`).
+
+### Локально
+
+```bash
+cp .env.example .env.local
+# заполните TICKETS_API_KEY, NEXT_PUBLIC_YANDEX_MAPS_KEY и URL API
+
+# для build-args при docker compose build (подстановка ${VAR})
+cp .env.local .env
+
+docker compose build
+docker compose up -d
+```
+
+Приложение: [http://localhost:3000](http://localhost:3000).
+
+Логи: `docker compose logs -f frontend`. Остановка: `docker compose down`.
+
+### Переменные
+
+| Переменная | Когда |
+|------------|--------|
+| `API_PROXY_TARGET`, `NEXT_PUBLIC_YANDEX_MAPS_KEY` | **Сборка образа** — после смены нужен `docker compose build` |
+| `TICKETS_API_URL`, `TICKETS_API_KEY`, `TICKETS_USER_ID_MAP` | **Запуск контейнера** (`.env.local`) |
+
+Если auth/monitoring крутится **на том же хосте**, что и Docker, укажите  
+`API_PROXY_TARGET=http://host.docker.internal:8000` (в compose уже добавлен `extra_hosts`).
+
+Не задавайте `NEXT_PUBLIC_API_URL=http://127.0.0.1:...` — в браузере пользователей это не сработает.
+
+### На VPS
+
+```bash
+git clone <repo> && cd Code-nGo
+cp .env.example .env.local && nano .env.local
+cp .env.local .env
+docker compose build
+docker compose up -d
+```
+
+Снаружи откройте порт `3000` или поставьте nginx → `127.0.0.1:3000`.
+
+Обновление: `git pull && docker compose build && docker compose up -d`.
+
 ## Структура
 
 ```
