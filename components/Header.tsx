@@ -28,7 +28,7 @@ const typeColors: Record<AppNotificationType, string> = {
 
 export default function Header() {
   const { theme, toggle } = useTheme()
-  const { user, logout, canAccessAdmin } = useAuth()
+  const { user, logout } = useAuth()
   const { notifications, unread, markAllRead } = useNotifications()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
@@ -198,16 +198,14 @@ export default function Header() {
                 </div>
                 <div className="text-xs text-surface-500 truncate">{user?.email}</div>
               </div>
-              {canAccessAdmin && (
-                <Link
-                  href="/admin/users"
-                  className="flex items-center gap-3 p-3 hover:bg-surface-200/50"
-                  onClick={() => setShowUser(false)}
-                >
-                  <User size={16} />
-                  <span className="text-sm">Пользователи</span>
-                </Link>
-              )}
+              <Link
+                href="/profile"
+                className="flex items-center gap-3 p-3 hover:bg-surface-200/50"
+                onClick={() => setShowUser(false)}
+              >
+                <User size={16} />
+                <span className="text-sm">Профиль</span>
+              </Link>
               <button
                 type="button"
                 onClick={() => {

@@ -115,11 +115,12 @@ export function userRolesLabel(user: User | null | undefined): string {
   return user.roles.map((r) => roleDisplayName(r)).join(', ')
 }
 
-/** Маршруты, доступные технику (только заявки) */
-export const TECHNICIAN_PATHS = ['/requests', '/login'] as const
+/** Маршруты, доступные технику (только заявки + профиль) */
+export const TECHNICIAN_PATHS = ['/requests', '/profile', '/login'] as const
 
 export function canTechnicianAccessPath(pathname: string): boolean {
   if (pathname === '/requests' || pathname.startsWith('/requests/')) return true
+  if (pathname === '/profile') return true
   if (pathname === '/login') return true
   return false
 }
