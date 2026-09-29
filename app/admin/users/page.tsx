@@ -6,7 +6,13 @@ import DataTable from '@/components/DataTable'
 import { useAuth } from '@/components/AuthProvider'
 import { ApiError } from '@/lib/api/types'
 import type { Role, User } from '@/lib/api/types'
-import { assignRoles, createUser, listRoles } from '@/lib/api/users'
+import { assignRoles, createRole, createUser, listPermissions, listRoles } from '@/lib/api/users'
+import {
+  isTechnicianRoleName,
+  roleDisplayName,
+  rolesForAdminPanel,
+  userRolesLabel
+} from '@/lib/roles'
 
 type FormState = {
   login: string
@@ -37,7 +43,7 @@ function fullName(u: User) {
 }
 
 function roleNames(u: User) {
-  return u.roles?.map((r) => r.name).join(', ') || '—'
+  return userRolesLabel(u)
 }
 
 export default function UsersPage() {
@@ -56,10 +62,33 @@ export default function UsersPage() {
     setLoading(true)
     setError(null)
     try {
-      const roleList = await listRoles()
-      setRoles(roleList)
-      // GET /users пока нет в API — показываем текущего пользователя
-      // и тех, кого создали в этой сессии (локальный список).
+      let roleList = await listRoles()
+
+      // Гарантируем роль «Техник» в справочнике auth
+      if (!roleList.some((r) => isTechnicianRoleName(r.name))) {
+        try {
+          const perms = await listPermissions()
+          const ticketPermIds = perms
+            .filter(
+              (p) =>
+                p.name.startsWith('ticket.') ||
+                p.name === 'object.read' ||
+                /заявк/i.test(p.description || '') ||
+                /заявк/i.test(p.name)
+            )
+            .map((p) => p.id)
+          await createRole({
+            name: 'Техник',
+            description: 'Доступ только к модулю заявок',
+            permission_ids: ticketPermIds
+          })
+          roleList = await listRoles()
+        } catch {
+          // нет права roles:manage или API отклонил — UI всё равно знает роль локально
+        }
+      }
+
+      setRoles(rolesForAdminPanel(roleList))
       setUsers((prev) => {
         const map = new Map<number, User>()
         if (me) map.set(me.id, me)
@@ -104,9 +133,10 @@ export default function UsersPage() {
   const blockedCount = users.filter((u) => !u.is_active).length
 
   const openModal = () => {
+    const assignable = roles
     setForm({
       ...emptyForm(),
-      roleId: roles[0] ? String(roles[0].id) : ''
+      roleId: assignable[0] ? String(assignable[0].id) : ''
     })
     setFormError(null)
     setShowModal(true)
@@ -285,8 +315,7 @@ export default function UsersPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {roles.map((role) => (
             <div key={role.id} className="rounded-lg border border-surface-300/40 bg-surface-200/30 p-3">
-              <div className="font-medium text-surface-900">{role.name}</div>
-              <div className="text-xs text-surface-500 mt-1">{role.description || '—'}</div>
+              <div className="font-medium text-surface-900">{roleDisplayName(role)}</div>
               <div className="text-xs text-surface-600 mt-2">
                 Прав: {role.permissions?.length || 0}
               </div>
@@ -381,7 +410,7 @@ export default function UsersPage() {
               >
                 <option value="">Без роли</option>
                 {roles.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>{roleDisplayName(r)}</option>
                 ))}
               </select>
               <div className="flex gap-2 pt-2">

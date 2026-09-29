@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '@/components/AuthProvider'
+import { isTechnician } from '@/lib/roles'
 
 const mainNav = [
   { href: '/dashboard',   label: 'Дашборд',           icon: LayoutDashboard },
@@ -26,10 +27,15 @@ const adminNav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { canAccessAdmin } = useAuth()
+  const { user, canAccessAdmin } = useAuth()
+  const technicianOnly = isTechnician(user)
+
+  const visibleMain = technicianOnly
+    ? mainNav.filter((item) => item.href === '/requests')
+    : mainNav
 
   const Item = ({ href, label, icon: Icon }: any) => {
-    const active = pathname === href
+    const active = pathname === href || (href !== '/requests' && pathname.startsWith(href + '/')) || (href === '/requests' && pathname.startsWith('/requests'))
     return (
       <Link
         href={href}
@@ -59,12 +65,14 @@ export default function Sidebar() {
       </div>
 
       <nav className="p-3 space-y-1 flex-1 overflow-y-auto min-h-0">
-        <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 font-semibold">Основное</div>
-        {mainNav.map(Item)}
+        <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 font-semibold">
+          {technicianOnly ? 'Заявки' : 'Основное'}
+        </div>
+        {visibleMain.map(Item)}
 
-        {canAccessAdmin && (
+        {canAccessAdmin && !technicianOnly && (
           <>
-            <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 mt-4 font-semibold">Администратор</div>
+            <div className="text-xs uppercase tracking-wider text-surface-500 px-3 py-2 mt-4 font-semibold">Администрирование</div>
             {adminNav.map(Item)}
           </>
         )}

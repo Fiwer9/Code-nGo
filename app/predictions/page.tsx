@@ -1,10 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Brain, Clock, AlertCircle, CheckCircle2, XCircle, Eye } from 'lucide-react'
 import Card from '@/components/Card'
 import { predictions } from '@/lib/mockData'
 
 export default function PredictionsPage() {
+  const router = useRouter()
   const [selected, setSelected] = useState<any>(null)
 
   return (
@@ -120,7 +122,17 @@ export default function PredictionsPage() {
                   ))}
                 </div>
               </div>
-              <button className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-lg text-sm transition">
+              <button
+                type="button"
+                className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-lg text-sm transition"
+                onClick={() =>
+                  router.push(
+                    `/requests?object_id=${encodeURIComponent(selected.object)}&create=1&title=${encodeURIComponent(
+                      `Проверка: ${selected.type} (${selected.object})`
+                    )}&warning_source=${encodeURIComponent(selected.id)}`
+                  )
+                }
+              >
                 Создать заявку на проверку
               </button>
             </div>

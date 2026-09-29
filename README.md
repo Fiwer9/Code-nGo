@@ -71,6 +71,19 @@ NEXT_PUBLIC_YANDEX_MAPS_KEY=ваш_ключ
 
 Координаты объектов пока демо (см. `mapObjects` в `lib/mockData.ts`). Правки положения на карте сохраняются в `localStorage` браузера.
 
+### Модуль заявок (Ticket Service)
+
+Раздел `/requests` ходит в Ticket Service через BFF `/api/ticket-service/*` (сервер Next.js подставляет `X-API-Key`, `X-User-Id`, `X-Role` из JWT auth-сервиса).
+
+В `.env.local`:
+
+```bash
+TICKETS_API_URL=http://139.100.207.246:8081
+TICKETS_API_KEY=ваш_ключ
+```
+
+Роли UI: ADMIN / MANAGER / ENGINEER / OBSERVER — маппинг из ролей сервера авторизации; фактические `allowed_actions` при возможности берутся из `GET /api/v1/users/me` Ticket Service.
+
 ## Примечание для Windows / PowerShell
 
 Если `npm` не находится — проверьте, что Node.js добавлен в PATH, и перезапустите терминал.

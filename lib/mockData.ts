@@ -98,9 +98,8 @@ export type MapObject = {
   description: string
   sensors: CollectorSensor[]
   /**
-   * ID связанной заявки (если есть).
-   * Для статуса ТО заявка предполагается всегда;
-   * для остальных — если задано, в UI «Перейти к задаче».
+   * ID связанной заявки (числовой id Ticket Service).
+   * Для статуса ТО заявка обязательна — иначе статус сбрасывается в норму.
    */
   taskId?: string | null
 }
@@ -173,7 +172,6 @@ export const mapObjects: MapObject[] = [
     len: '1.2 км',
     address: 'ш. Энтузиастов',
     description: 'Узел у склада К6. Повышенное задымление на участке В-2.',
-    taskId: 'ZAY-2026-0142',
     sensors: sensorsFor('МК-2.2.2', [
       {
         name: 'Датчик задымления',
@@ -367,21 +365,21 @@ export const mapObjects: MapObject[] = [
     id: 'МК-9.2.1',
     lat: 55.6905,
     lng: 37.6218,
-    status: 'maintenance',
+    status: 'ok',
     type: 'Насосная',
     len: '1.5 км',
     address: 'Юг, Нагатинская',
-    description: 'Насосная станция на плановом ТО до 20.09.',
-    taskId: 'ZAY-2026-0098',
+    description: 'Насосная станция. Штатный режим.',
     sensors: sensorsFor('МК-9.2.1', [
       {
         name: 'Насос №1',
         kind: 'pump',
-        status: 'maintenance',
-        lastCheck: '19.09.2026 08:00',
+        status: 'online',
+        lastCheck: '19.09.2026 14:30',
         place: 'Агрегат 1',
         readings: [
-          { label: 'Режим', value: 'ТО', unit: '', level: 'ok' }
+          { label: 'Режим', value: 'Работа', unit: '', level: 'ok' },
+          { label: 'Давление', value: '4.1', unit: 'бар', level: 'ok' }
         ]
       },
       {

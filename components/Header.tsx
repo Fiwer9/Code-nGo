@@ -4,6 +4,7 @@ import { useTheme } from './ThemeProvider'
 import { useAuth } from './AuthProvider'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { userRolesLabel } from '@/lib/roles'
 
 function initials(user: { name: string; surname: string }) {
   const a = user.name?.[0] || ''
@@ -64,7 +65,7 @@ export default function Header() {
     critical: 'bg-danger', warning: 'bg-warning', info: 'bg-info'
   }
 
-  const roleLabel = user?.roles?.[0]?.name || user?.jobtitle || 'Пользователь'
+  const roleLabel = userRolesLabel(user) || user?.jobtitle || 'Пользователь'
 
   return (
     <header className="sticky top-0 z-40 glass border-b border-surface-200 px-6 py-3 flex items-center gap-4">

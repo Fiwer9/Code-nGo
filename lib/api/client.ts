@@ -51,6 +51,11 @@ export function clearSession() {
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
   auth?: boolean
+  /**
+   * База URL. По умолчанию — auth API (`getApiBase()`).
+   * Для same-origin BFF (например `/api/ticket-service`) передайте `''`.
+   */
+  base?: string
 }
 
 function formatDetail(detail: unknown): string {
@@ -66,15 +71,23 @@ function formatDetail(detail: unknown): string {
       })
       .join('; ')
   }
-  if (typeof detail === 'object' && detail !== null && 'detail' in detail) {
-    return formatDetail((detail as { detail: unknown }).detail)
+  if (typeof detail === 'object' && detail !== null) {
+    const obj = detail as Record<string, unknown>
+    // Ticket Service: { error, message, details }
+    if (typeof obj.message === 'string' && obj.message.trim()) {
+      return obj.message
+    }
+    if ('detail' in obj) {
+      return formatDetail(obj.detail)
+    }
   }
   return 'Ошибка запроса'
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, auth = false, headers, ...rest } = options
-  const url = `${getApiBase()}${path.startsWith('/') ? path : `/${path}`}`
+  const { body, auth = false, headers, base, ...rest } = options
+  const root = base !== undefined ? base.replace(/\/$/, '') : getApiBase()
+  const url = `${root}${path.startsWith('/') ? path : `/${path}`}`
 
   const finalHeaders: HeadersInit = {
     Accept: 'application/json',

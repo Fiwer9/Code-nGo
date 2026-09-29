@@ -15,6 +15,7 @@ import { clearSession, getStoredToken, getStoredUserJson, saveSession } from '@/
 import type { LoginRequest, User } from '@/lib/api/types'
 import { ApiError } from '@/lib/api/types'
 import { canAccessAdmin, hasPermission } from '@/lib/permissions'
+import { canTechnicianAccessPath, isTechnician } from '@/lib/roles'
 
 type AuthContextValue = {
   user: User | null
@@ -103,11 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     if (user && pathname === '/login') {
-      router.replace('/dashboard')
+      router.replace(isTechnician(user) ? '/requests' : '/dashboard')
+      return
+    }
+    if (user && isTechnician(user) && !canTechnicianAccessPath(pathname)) {
+      router.replace('/requests')
       return
     }
     if (user && pathname.startsWith('/admin') && !canAccessAdmin(user)) {
-      router.replace('/dashboard')
+      router.replace(isTechnician(user) ? '/requests' : '/dashboard')
     }
   }, [loading, user, pathname, router])
 

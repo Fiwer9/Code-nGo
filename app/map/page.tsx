@@ -100,6 +100,28 @@ export default function MapPage() {
     setObjects(loadMapObjects())
   }, [])
 
+  // После создания заявки на другой странице — подтянуть taskId без F5
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        setObjects(loadMapObjects())
+      }
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
+
+  // Клиентский переход на /map тоже перечитывает localStorage
+  useEffect(() => {
+    const onPageShow = () => setObjects(loadMapObjects())
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
+
   const objectStatus = useCallback((o: MapObject) => deriveCollectorStatus(o.sensors), [])
 
   const filtered =
@@ -246,8 +268,20 @@ export default function MapPage() {
                   onApplyCoords={() => {}}
                   onSelectSensor={setSelectedSensorId}
                   onClose={closePopup}
-                  onCreateTask={() => router.push('/requests')}
-                  onGoToTask={() => router.push('/requests')}
+                  onCreateTask={() =>
+                    router.push(
+                      `/requests?object_id=${encodeURIComponent(sel.id)}&create=1&title=${encodeURIComponent(
+                        `Заявка по объекту ${sel.id}`
+                      )}`
+                    )
+                  }
+                  onGoToTask={() => {
+                    if (sel.taskId && /^\d+$/.test(String(sel.taskId))) {
+                      router.push(`/requests/${sel.taskId}`)
+                      return
+                    }
+                    router.push(`/requests?object_id=${encodeURIComponent(sel.id)}`)
+                  }}
                   onPositionChange={(pos) => {
                     const box = mapBoxRef.current
                     if (!box) {

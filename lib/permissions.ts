@@ -1,4 +1,5 @@
 import type { User } from '@/lib/api/types'
+import { isAdminRoleName, isCityDispatcher } from '@/lib/roles'
 
 /** Права, достаточные для доступа к разделу «Администратор» */
 const ADMIN_PERMISSIONS = [
@@ -35,6 +36,8 @@ export function hasAnyPermission(
 /** Есть ли доступ к админ-панели (пользователи, роли, интеграции) */
 export function canAccessAdmin(user: User | null | undefined): boolean {
   if (!user) return false
-  if (user.roles?.some((r) => /admin/i.test(r.name))) return true
+  // Городской диспетчер — права как у администратора
+  if (isCityDispatcher(user)) return true
+  if (user.roles?.some((r) => isAdminRoleName(r.name))) return true
   return hasAnyPermission(user, ADMIN_PERMISSIONS)
 }

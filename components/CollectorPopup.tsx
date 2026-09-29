@@ -40,9 +40,9 @@ type Props = {
   onSelectSensor: (sensorId: string) => void
   onClose: () => void
   onPositionChange: (pos: PopupPos) => void
-  /** заглушка: создать заявку */
+  /** создать заявку по объекту */
   onCreateTask?: () => void
-  /** заглушка: открыть существующую заявку */
+  /** открыть заявки объекта / карточку */
   onGoToTask?: () => void
 }
 
@@ -65,9 +65,9 @@ export default function CollectorPopup({
   const status = deriveCollectorStatus(object.sensors)
   const st = COLLECTOR_STATUS_META[status]
   const onlineCount = object.sensors.filter((s) => s.status === 'online').length
-  const hasTask = Boolean(object.taskId)
-  /** ТО всегда ведёт к задаче; остальные — если заявка уже есть */
-  const showGoToTask = status === 'maintenance' || hasTask
+  const hasTask = Boolean(object.taskId) && /^\d+$/.test(String(object.taskId))
+  /** ТО всегда с заявкой; иначе — только если taskId реальный */
+  const showGoToTask = hasTask
   const dragRef = useRef<{
     pointerId: number
     startX: number
