@@ -1,200 +1,177 @@
-# Code-nGo Backend
+# Ticket Service (модуль управления заявками)
 
-Backend веб-сервиса системы предиктивного мониторинга Москоллектора (разработка для хакатона ЛЦТ).
+Микросервис управления заявками (tasks/tickets) в рамках CRM-подобной архитектуры.
 
-## Что реализовано
+## Возможности
 
-1. **Модуль аутентификации**:
-   - PostgreSQL + Argon2id + JWT. Уникальная соль, защищенное хранение паролей.
-2. **Модуль прав доступа (RBAC)**:
-   - Роли (`Administrator`, `City Dispatcher`, `District Dispatcher`).
-   - Настраиваемые `permissions`.
-3. **Мониторинг оборудования (Equipment API)**:
-   - Интеграция больших датасетов (`channels`, `objects`, `sensor_logs`).
-   - Оптимизированный расчет последних состояний.
-   - Нормализация типов датчиков и автоматическое определение статусов (`online`, `warning`, `offline`, `maintenance`).
-4. **Предиктивная аналитика (Predictions API)**:
-   - Хранение результатов ML-моделей.
-   - Просмотр прогнозов (risk_score).
-   - Принятие решений диспетчером (`accepted`, `rejected`, `verified`).
-5. **Журнал инцидентов (Incidents API)**:
-   - Фиксация аварий и тревожных событий.
-   - Фильтрация по статусам и поиск.
-   - Экспорт в CSV.
+* Создание заявки из предупреждения, пришедшего **с объекта** (`object_id` — обязательная привязка).
+* Жизненный цикл заявки по стадиям:
+  `НЕ ОБРАБОТАНА -> ОЖИДАЕТ ТО -> ДИАГНОСТИКА -> В РАБОТЕ -> КОНТРОЛЬ -> ОБРАБОТАНА`
+* Ролевая модель доступа (**проверку прав выполняет внешний модуль прав доступа**, сервис только обращается к нему):
+  * `ADMIN` - видит все заявки;
+  * `MANAGER` - ставит и редактирует заявки, управляет стадией, выступает постановщиком или наблюдателем;
+  * `ENGINEER` - исполнитель, управляет стадией своих заявок.
+* История изменений (аудит) каждой заявки.
+* REST API (FastAPI), хранилище - PostgreSQL (SQLAlchemy Core, без ORM).
 
-## Схема таблиц БД
+## Структура
 
-- `users`: Пользователи системы.
-- `roles`, `permissions`, `user_roles`, `role_permissions`: Ролевая модель доступа.
-- `objects`: Инфраструктурные объекты (с иерархией и геоданными PostGIS + latitude/longitude).
-- `channels`: Каналы данных (датчики), привязанные к объектам.
-- `sensor_states`: Справочник состояний датчиков.
-- `sensor_logs`: Журнал событий датчиков (партиционирован по дате для 1+ ГБ логов).
-- `predictions`: Журнал прогнозов ML.
-- `incidents`: Журнал зарегистрированных инцидентов.
+```
+ticket_service/
+├── run.py                  # точка входа (uvicorn)
+├── requirements.txt
+├── .env.example            # шаблон ENV (CORS, ключи, домен)
+├── docker-compose.yml      # БД + API (+ Caddy HTTPS, profile https)
+├── Dockerfile              # порт 8080 внутри контейнера
+├── deploy/
+│   ├── Caddyfile           # reverse-proxy + Let's Encrypt
+│   └── VPS.md              # пошаговый деплой на VPS
+├── db/schema.sql           # DDL (tickets / ticket_users / ticket_history / notifications)
+└── app/
+    ├── main.py             # FastAPI + CORS + роутеры
+    ├── config.py           # настройки из ENV
+    ├── database.py         # пул соединений с PostgreSQL
+    ├── models.py           # Enum-стадии, Pydantic-схемы запросов/ответов
+    ├── exceptions.py       # доменные исключения -> HTTP
+    ├── auth/
+    │   ├── access_control.py   # клиент модуля прав доступа (HTTP / in-memory fallback)
+    │   └── dependencies.py     # FastAPI-зависимости (X-API-Key, X-User-Id)
+    ├── repositories/
+    │   └── ticket_repository.py  # слой работы с БД (CRUD, только SQL)
+    ├── services/
+    │   └── ticket_service.py     # бизнес-логика: одна операция = один метод
+    └── api/routes/
+        ├── tickets.py        # эндпоинты заявок
+        ├── objects.py        # сводка по объектам
+        ├── users.py          # справочник пользователей (для UI)
+        ├── notifications.py  # inbox уведомлений
+        └── cache.py          # метрики/сброс кэша
+```
 
-## Логика определения статусов оборудования (Demo Logic)
+## Запуск
 
-- `warning`: Последнее зафиксированное событие по датчику имеет флаг `is_alarm = true`.
-- `online`: По датчику есть свежие данные и они не тревожные.
-- `offline`: Если данные старше 24 часов от максимального времени в логах.
-- `maintenance`: Пока возвращается 0, так как исходный датасет не содержит признака ТО.
+### Вариант 1 — Docker (рекомендуется, поднимает и PostgreSQL)
 
-> **Примечание:** Определение "устаревших" данных происходит относительно максимальной даты в загруженном датасете, а не текущего реального времени, чтобы демо-данные не стали `offline`.
+```bash
+cp .env.example .env         # задайте TICKETS_API_KEY и CORS_ORIGINS
+docker compose up -d --build
+curl http://localhost:8080/health
+# Swagger UI: http://localhost:8080/docs
+docker compose down -v       # остановить и удалить том с данными
+```
 
-## Демонстрационные данные (Важно!)
+Порты (везде **8080** для HTTP API):
 
-- **Координаты**: Исходные датасеты не содержали GPS-координат. Скрипт `seed_demo_monitoring.py` генерирует детерминированные (по фиксированному seed) демонстрационные координаты в радиусе центра Москвы.
-- **Прогнозы и инциденты**: Так как ML-модель еще не подключена к пайплайну в реальном времени, создаются демонстрационные (seed) записи для отображения во frontend-интерфейсе.
+| Где | Порт |
+|---|---|
+| Uvicorn внутри контейнера | `8080` |
+| Проброс на хост | `${TICKETS_PUBLISH_PORT:-8080}:8080` |
+| PostgreSQL | только внутри docker-сети (`db:5432`), наружу не публикуется |
+| HTTPS (Caddy, profile `https`) | `80` / `443` → `app:8080` |
 
----
+Только образ сервиса без compose:
 
-## Развертывание и Запуск
+```bash
+docker build -t ticket-service:1.0.0 .
+docker run -d --name ticket-service -p 8080:8080 \
+  -e TICKETS_DATABASE_URL="postgresql+psycopg2://tickets_app:tickets_pass@host.docker.internal:5432/tickets_db" \
+  -e CORS_ORIGINS="http://localhost:5173" \
+  ticket-service:1.0.0
+```
 
-### 1. Подготовка конфигурации
+Распределённый кэш на Redis (опционально): `docker compose --profile cache up -d`
+и `REDIS_URL=redis://redis:6379/0` в `.env`.
+
+### Деплой на VPS (доступ из интернета + фронт)
+
+Краткая схема — подробности в [`deploy/VPS.md`](deploy/VPS.md):
+
 ```bash
 cp .env.example .env
-```
-Обязательно измените `JWT_SECRET` на случайную строку.
-
-### 2. Запуск Docker Compose
-```bash
+# POSTGRES_PASSWORD, TICKETS_API_KEY, CORS_ORIGINS, PUBLIC_BASE_URL
 docker compose up -d --build
+# API: http://YOUR_VPS_IP:8080  |  docs: http://YOUR_VPS_IP:8080/docs
 ```
-Документация Swagger станет доступна по адресу: `http://localhost:8000/docs`.
 
-### 3. Загрузка Датасетов (CSV)
-Положите 4 CSV файла в папку `data/` в корне проекта:
-- `data/справочник_объектов_диспетчер.csv`
-- `data/справочник_каналов_датчиков.csv`
-- `data/справочник_состояний.csv`
-- `data/журнал_событий_пример.csv` (или полная версия)
+С доменом и HTTPS:
 
-Маппинг CSV -> PostgreSQL:
-- `справочник_объектов_диспетчер.csv` -> `objects` (id, hierarchy_level, parent_id, object_type, disp_name)
-- `справочник_каналов_датчиков.csv` -> `channels` (id, sys_type, sensor_type, tag, name, object_id)
-- `справочник_состояний.csv` -> `sensor_states` (sensor_type, state_set_id, state_name, is_alarm)
-- `журнал_событий...csv` -> `sensor_logs` (id, channel_id, event_date, event_time, is_alarm, sensor_value)
-
-Выполните скрипт загрузки внутри контейнера:
 ```bash
-docker compose exec backend-api python scripts/load_dataset.py
+# в .env: DOMAIN=api.example.com  PUBLIC_BASE_URL=https://api.example.com
+#         CORS_ORIGINS=https://your-frontend.example.com
+docker compose --profile https up -d --build
 ```
-> **Внимание:** Загрузка `sensor_logs` использует сверхбыстрый драйверный `COPY STDIN WITH CSV`. 
 
-### 4. Генерация Demo Data
+С фронта на каждый запрос передавайте заголовки `X-API-Key`, `X-User-Id`, `X-Role`.
+`CORS_ORIGINS` должен совпадать с origin фронта (схема + хост + порт).
+
+### Вариант 2 — локально без Docker
+
 ```bash
-docker compose exec backend-api python scripts/seed_demo_monitoring.py
+pip install -r requirements.txt
+
+# подготовить БД (PostgreSQL должен быть запущен)
+psql "$TICKETS_DATABASE_URL" -f db/schema.sql
+
+python run.py            # http://127.0.0.1:8080
+# интерактивная документация: http://127.0.0.1:8080/docs
 ```
 
-### 5. Миграции существующей БД
-Если БД уже существует, новые таблицы и колонки применяются через SQL миграцию:
+Быстрый старт без PostgreSQL (in-memory хранилище, только для разработки):
+
 ```bash
-docker compose exec db psql -U postgres -d moscollector -f /docker-entrypoint-initdb.d/../db/migrations/003_monitoring_data.sql
+TICKETS_DATABASE_URL=memory python run.py
 ```
 
----
+Переменные окружения (см. `.env.example`):
 
-## Frontend Integration
+| Переменная | Описание | По умолчанию |
+|---|---|---|
+| `TICKETS_DATABASE_URL` | строка подключения к PostgreSQL | `postgresql+psycopg2://…@127.0.0.1:5432/tickets_db` |
+| `TICKETS_PORT` | порт HTTP API | `8080` |
+| `CORS_ORIGINS` | origin фронта через запятую или `*` | `*` |
+| `PUBLIC_BASE_URL` | публичный URL (для Swagger) | пусто / localhost |
+| `ACCESS_CONTROL_URL` | адрес модуля прав доступа (если пуст - встроенный stub) | пусто |
+| `ACCESS_CONTROL_API_KEY` | ключ сервиса для обращений к модулю прав | `service-secret-key` |
+| `TICKETS_API_KEY` | ключ для обращений клиентов к этому API | `gateway-secret-key` |
+| `SEED_DEMO_DATA` | `1` - загрузить демо-пользователей | `1` |
+| `DOMAIN` | домен для Caddy HTTPS | — |
+## Аутентификация и авторизация
 
-Ветка `web/site` выступает источником контрактов. API разработано так, чтобы минимизировать преобразования на стороне фронтенда.
+Клиент (API-шлюз / фронтенд) передаёт заголовки:
 
-**Авторизация**: Для выполнения запросов нужно получить JWT токен через `/api/v1/auth/login` и передавать его в заголовке `Authorization: Bearer <token>`. Администратор имеет полный доступ.
-
-### 1. Оборудование
-`GET /api/v1/equipment?limit=50&offset=0&status=online&search=120298`
-
-```json
-{
-  "items": [
-    {
-      "id": "120298",
-      "name": "Темп. ВШ ПК88,5",
-      "location": "6",
-      "type": "temperature",
-      "sensor_type": "Датчик температуры",
-      "system_type": "Температурная подсистема",
-      "status": "online",
-      "lastCheck": "2026-08-01T12:17:17",
-      "objectId": 20,
-      "parentId": 6
-    }
-  ],
-  "stats": {
-    "total": 1,
-    "online": 1,
-    "warning": 0,
-    "offline": 0,
-    "maintenance": 0
-  },
-  "pagination": {
-    "limit": 50,
-    "offset": 0,
-    "total": 1
-  }
-}
+```
+X-API-Key: gateway-secret-key     # ключ вызывающей стороны
+X-User-Id: manager_ivanov          # субъект от имени которого выполняется действие
+X-Role: MANAGER                    # роль, выданная модулем аутентификации (не доверяем - сверяем)
 ```
 
-### 2. Прогнозы (Предиктивная аналитика)
-`GET /api/v1/predictions?limit=50&offset=0&status=pending`
+Сервис **не хранит пароли и не решает самостоятельно, можно ли пользователю что-то делать**:
+он запрашивает разрешение у модуля прав доступа (`POST {ACCESS_CONTROL_URL}/check`)
+и получает список доступных объектов (`GET {ACCESS_CONTROL_URL}/objects/{user_id}`).
+Если модуль недоступен, используется встроенный `InMemoryAccessControlClient` (только для разработки).
 
-```json
-{
-  "items": [
-    {
-      "id": "P-00124",
-      "object": "ДУ объект Альфа",
-      "objectId": 5122,
-      "type": "Подтопление",
-      "horizon": "24ч",
-      "horizonHours": 24,
-      "probability": 92,
-      "model": "FloodNet v3.2",
-      "verified": false,
-      "status": "pending",
-      "inferenceSeconds": 4.2,
-      "factors": [
-        {
-          "label": "Температура",
-          "value": 85.0
-        }
-      ],
-      "createdAt": "2026-09-19T14:32:00"
-    }
-  ],
-  "pagination": { ... }
-}
+## Основные эндпоинты
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/health` | состояние сервиса и БД |
+| GET | `/api/v1/health` | то же (алиас) |
+| POST | `/api/v1/tickets` | создать заявку (из предупреждения объекта) |
+| GET | `/api/v1/tickets` | список заявок с фильтрами/пагинацией |
+| GET | `/api/v1/tickets/{id}` | карточка заявки |
+| PATCH | `/api/v1/tickets/{id}` | редактировать заявку |
+| DELETE | `/api/v1/tickets/{id}` | удалить заявку (admin) |
+| PUT | `/api/v1/tickets/{id}/stage` | перевести на другую стадию |
+| POST | `/api/v1/tickets/{id}/comments` | комментарий (пишет историю) |
+| GET | `/api/v1/tickets/{id}/history` | история изменений |
+| GET | `/api/v1/tickets/stats/stages` | счётчики по стадиям |
+| GET | `/api/v1/objects` | объекты пользователя со сводкой заявок |
+| GET | `/api/v1/objects/{object_id}/tickets` | заявки конкретного объекта |
+| GET | `/api/v1/users/me` | текущий субъект и его права |
+| GET | `/api/v1/users` | справочник пользователей (для выбора исполнителя) |
+
+## Тесты
+
+```bash
+pytest -q            # unit-тесты (in-memory репозиторий + mock модуля прав)
 ```
-
-**Решение по прогнозу:**
-`POST /api/v1/predictions/P-00124/decision`
-```json
-{
-  "decision": "accepted"
-}
-```
-
-### 3. Журнал Инцидентов
-`GET /api/v1/incidents?limit=50&offset=0&status=critical`
-
-```json
-{
-  "items": [
-    {
-      "id": "INC-2026-0842",
-      "object": "ДУ объект Альфа",
-      "objectId": 5122,
-      "type": "Подтопление",
-      "status": "critical",
-      "probability": 92,
-      "date": "2026-09-19T14:32:00",
-      "location": "5"
-    }
-  ],
-  "pagination": { ... }
-}
-```
-
-**Экспорт CSV:**
-`GET /api/v1/incidents/export.csv`
-Отдаст файл `incidents.csv`.

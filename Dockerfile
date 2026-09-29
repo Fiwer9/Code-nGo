@@ -1,22 +1,73 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1
+# ============================================================================
+# Микросервис заявок (Ticket Service) — образ для продакшена.
+#
+# Порт внутри контейнера: 8080 (везде одинаковый: EXPOSE / HEALTHCHECK / CMD).
+#
+# Сборка:  docker build -t ticket-service:1.0.0 .
+# Запуск:  docker run -d --name ticket-service -p 8080:8080 \
+#            -e TICKETS_DATABASE_URL=postgresql+psycopg2://tickets_app:tickets_pass@db:5432/tickets_db \
+#            ticket-service:1.0.0
+# ============================================================================
 
-WORKDIR /app
+# --------------------------------------------------------------------------
+# Стадия сборки зависимостей
+# --------------------------------------------------------------------------
+FROM python:3.12-slim AS builder
 
-# Установка системных библиотек для psycopg2 и гео-данных
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Установка зависимостей Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r requirements.txt
 
-# Копирование исходного кода приложения
-COPY . .
+# --------------------------------------------------------------------------
+# Финальный образ
+# --------------------------------------------------------------------------
+FROM python:3.12-slim AS runtime
 
-EXPOSE 8000
+LABEL org.opencontainers.image.title="ticket-service" \
+      org.opencontainers.image.description="Микросервис управления заявками (CRM-задачи): FastAPI + PostgreSQL" \
+      org.opencontainers.image.version="1.0.0"
 
-# Запуск приложения FastAPI
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    TICKETS_HOST=0.0.0.0 \
+    TICKETS_PORT=8080
+
+# curl — healthcheck, libpq5 — драйвер psycopg2-binary
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid appuser --shell /usr/sbin/nologin --create-home appuser
+
+WORKDIR /srv/ticket-service
+
+COPY --from=builder /opt/venv /opt/venv
+
+COPY app/ ./app/
+COPY db/ ./db/
+COPY run.py README.md ./
+
+RUN mkdir -p logs && chown -R appuser:appuser /srv/ticket-service
+
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+
+# Порт совпадает с TICKETS_PORT / EXPOSE / docker-compose mapping 8080:8080
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "*"]

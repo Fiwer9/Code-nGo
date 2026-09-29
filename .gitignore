@@ -1,14 +1,10 @@
-# Тяжелые датасеты и CSV
-*.csv
-data/
-
-# Виртуальное окружение Python и кэш
-venv/
-.venv/
+# Python compiled files and caches
 __pycache__/
 *.pyc
 
-# Секреты и настройки IDE
+# Logs
+logs/
+*.log
+
+# Environment variables
 .env
-.idea/
-.vscode/
