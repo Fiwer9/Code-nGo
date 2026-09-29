@@ -1,11 +1,24 @@
 'use client'
 import { Bell, Search, Sun, Moon, User, LogOut } from 'lucide-react'
 import { useTheme } from './ThemeProvider'
+import { useAuth } from './AuthProvider'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
+function initials(user: { name: string; surname: string }) {
+  const a = user.name?.[0] || ''
+  const b = user.surname?.[0] || ''
+  return `${a}${b}`.toUpperCase() || '?'
+}
+
+function shortName(user: { name: string; surname: string }) {
+  const s = user.surname?.[0] ? `${user.surname[0]}.` : ''
+  return `${user.name} ${s}`.trim()
+}
+
 export default function Header() {
   const { theme, toggle } = useTheme()
+  const { user, logout } = useAuth()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -51,9 +64,10 @@ export default function Header() {
     critical: 'bg-danger', warning: 'bg-warning', info: 'bg-info'
   }
 
+  const roleLabel = user?.roles?.[0]?.name || user?.jobtitle || 'Пользователь'
+
   return (
     <header className="sticky top-0 z-40 glass border-b border-surface-200 px-6 py-3 flex items-center gap-4">
-      {/* Поиск */}
       <div className="flex-1 max-w-md relative">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-500" />
         <input
@@ -64,7 +78,6 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Тема */}
         <button
           onClick={toggle}
           className="p-2 rounded-lg hover:bg-surface-200 text-surface-600 hover:text-surface-900 transition"
@@ -72,7 +85,6 @@ export default function Header() {
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        {/* Уведомления */}
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => { setShowNotif(v => !v); setShowUser(false) }}
@@ -116,7 +128,6 @@ export default function Header() {
           )}
         </div>
 
-        {/* Пользователь */}
         <div className="relative" ref={userRef}>
           <button
             onClick={() => { setShowUser(v => !v); setShowNotif(false) }}
@@ -125,25 +136,37 @@ export default function Header() {
             aria-haspopup="true"
           >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-semibold text-sm">
-              ДС
+              {user ? initials(user) : '—'}
             </div>
             <div className="text-left hidden md:block">
-              <div className="text-sm font-medium text-surface-900">Дмитрий С.</div>
-              <div className="text-xs text-surface-500">Диспетчер ОДС</div>
+              <div className="text-sm font-medium text-surface-900">
+                {user ? shortName(user) : 'Гость'}
+              </div>
+              <div className="text-xs text-surface-500">{roleLabel}</div>
             </div>
           </button>
 
           {showUser && (
             <div className="absolute right-0 top-12 w-64 bg-surface-100 border border-surface-200 rounded-xl shadow-xl shadow-surface-900/10 dark:shadow-black/50 animate-fadeIn">
+              <div className="px-3 py-2 border-b border-surface-200">
+                <div className="text-sm font-medium text-surface-900 truncate">
+                  {user ? `${user.surname} ${user.name}` : ''}
+                </div>
+                <div className="text-xs text-surface-500 truncate">{user?.email}</div>
+              </div>
               <Link
                 href="/admin/users"
-                className="flex items-center gap-3 p-3 hover:bg-surface-200/50 rounded-t-xl"
+                className="flex items-center gap-3 p-3 hover:bg-surface-200/50"
                 onClick={() => setShowUser(false)}
               >
                 <User size={16} />
-                <span className="text-sm">Профиль</span>
+                <span className="text-sm">Пользователи</span>
               </Link>
-              <button className="w-full flex items-center gap-3 p-3 hover:bg-surface-200/50 text-danger rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => { setShowUser(false); logout() }}
+                className="w-full flex items-center gap-3 p-3 hover:bg-surface-200/50 text-danger rounded-b-xl"
+              >
                 <LogOut size={16} />
                 <span className="text-sm">Выйти</span>
               </button>

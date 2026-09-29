@@ -1,7 +1,7 @@
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
-import Sidebar from '@/components/Sidebar'
-import Header from '@/components/Header'
+import { AuthProvider } from '@/components/AuthProvider'
+import AppShell from '@/components/AppShell'
 
 export const metadata = {
   title: 'Москоллектор · Сервис прогнозирования инцидентов',
@@ -29,13 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 flex flex-col">
-              <Header />
-              <div className="flex-1 p-6">{children}</div>
-            </main>
-          </div>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

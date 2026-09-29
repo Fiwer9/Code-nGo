@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Map, BookOpen, BarChart3, FileText, Cpu,
-  Users, Link as LinkIcon, Shield, Settings, ChevronRight, Activity, ClipboardList
+  Users, Link as LinkIcon, ChevronRight, Activity, ClipboardList
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -19,10 +19,8 @@ const mainNav = [
 ]
 
 const adminNav = [
-  { href: '/admin/users',        label: 'Пользователи',     icon: Users },
-  { href: '/admin/integrations', label: 'Интеграции',       icon: LinkIcon },
-  { href: '/admin/security',     label: 'Безопасность',     icon: Shield },
-  { href: '/admin/settings',     label: 'Общие настройки',  icon: Settings }
+  { href: '/admin/users',        label: 'Пользователи', icon: Users },
+  { href: '/admin/integrations', label: 'Интеграции',   icon: LinkIcon }
 ]
 
 export default function Sidebar() {
