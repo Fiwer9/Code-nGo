@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 import { useAuth } from '@/components/AuthProvider'
+import { NotificationsProvider } from '@/components/NotificationsProvider'
+import NotificationToasts from '@/components/NotificationToasts'
 import { canTechnicianAccessPath, isTechnician } from '@/lib/roles'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -51,12 +53,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 flex flex-col">
-        <Header />
-        <div className="flex-1 p-6">{children}</div>
-      </main>
-    </div>
+    <NotificationsProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <main className="flex-1 flex flex-col">
+          <Header />
+          <div className="flex-1 p-6">{children}</div>
+        </main>
+      </div>
+      <NotificationToasts />
+    </NotificationsProvider>
   )
 }

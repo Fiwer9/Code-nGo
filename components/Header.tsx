@@ -1,10 +1,13 @@
 'use client'
-import { Bell, Search, Sun, Moon, User, LogOut } from 'lucide-react'
+
+import { Bell, Search, Sun, Moon, User, LogOut, MapPin } from 'lucide-react'
 import { useTheme } from './ThemeProvider'
 import { useAuth } from './AuthProvider'
+import { useNotifications } from './NotificationsProvider'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { userRolesLabel } from '@/lib/roles'
+import { formatNotifAge, type AppNotificationType } from '@/lib/notificationsStore'
 
 function initials(user: { name: string; surname: string }) {
   const a = user.name?.[0] || ''
@@ -17,9 +20,16 @@ function shortName(user: { name: string; surname: string }) {
   return `${user.name} ${s}`.trim()
 }
 
+const typeColors: Record<AppNotificationType, string> = {
+  critical: 'bg-danger',
+  warning: 'bg-warning',
+  offline: 'bg-surface-500'
+}
+
 export default function Header() {
   const { theme, toggle } = useTheme()
   const { user, logout, canAccessAdmin } = useAuth()
+  const { notifications, unread, markAllRead } = useNotifications()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -55,14 +65,13 @@ export default function Header() {
     }
   }, [showNotif, showUser])
 
-  const notifications = [
-    { id: 1, type: 'critical', text: 'Критический инцидент: МК-6.7.8, подтопление', time: '5 мин' },
-    { id: 2, type: 'warning',  text: 'Прогноз пожара: МК-2.2.2, вероятность 78%',   time: '12 мин' },
-    { id: 3, type: 'info',     text: 'Модель обновлена: Precision 92.4%',            time: '1 ч' }
-  ]
-
-  const typeColors: Record<string, string> = {
-    critical: 'bg-danger', warning: 'bg-warning', info: 'bg-info'
+  const openNotif = () => {
+    setShowNotif((v) => {
+      const next = !v
+      if (next) markAllRead()
+      return next
+    })
+    setShowUser(false)
   }
 
   const roleLabel = userRolesLabel(user) || user?.jobtitle || 'Пользователь'
@@ -80,6 +89,7 @@ export default function Header() {
 
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={toggle}
           className="p-2 rounded-lg hover:bg-surface-200 text-surface-600 hover:text-surface-900 transition"
         >
@@ -88,41 +98,70 @@ export default function Header() {
 
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => { setShowNotif(v => !v); setShowUser(false) }}
+            type="button"
+            onClick={openNotif}
             className="p-2 rounded-lg hover:bg-surface-200 text-surface-600 hover:text-surface-900 transition relative"
             aria-expanded={showNotif}
             aria-haspopup="true"
+            aria-label="Уведомления"
           >
             <Bell size={18} />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full animate-pulse-ring" />
+            {unread > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full animate-pulse-ring" />
+            )}
           </button>
 
           {showNotif && (
             <div className="absolute right-0 top-12 w-96 bg-surface-100 border border-surface-200 rounded-xl shadow-xl shadow-surface-900/10 dark:shadow-black/50 animate-fadeIn">
               <div className="p-4 border-b border-surface-200">
                 <div className="font-semibold">Уведомления</div>
-                <div className="text-xs text-surface-500">3 новых события</div>
+                <div className="text-xs text-surface-500">
+                  {notifications.length === 0
+                    ? 'Нет событий'
+                    : unread > 0
+                      ? `${unread} новых`
+                      : 'Все прочитаны'}
+                </div>
               </div>
               <div className="max-h-80 overflow-y-auto">
-                {notifications.map(n => (
-                  <div key={n.id} className="p-3 border-b border-surface-200 hover:bg-surface-200/50 cursor-pointer">
-                    <div className="flex gap-3">
-                      <div className={clsx('w-2 h-2 rounded-full mt-2 flex-shrink-0', typeColors[n.type])} />
-                      <div className="flex-1">
-                        <div className="text-sm text-surface-900">{n.text}</div>
-                        <div className="text-xs text-surface-500 mt-1">{n.time} назад</div>
-                      </div>
-                    </div>
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-surface-500">
+                    Нет уведомлений по коллекторам
                   </div>
-                ))}
+                ) : (
+                  notifications.map((n) => (
+                    <Link
+                      key={n.id}
+                      href="/map"
+                      onClick={() => setShowNotif(false)}
+                      className={`block p-3 border-b border-surface-200 hover:bg-surface-200/50 ${
+                        n.read ? 'opacity-70' : ''
+                      }`}
+                    >
+                      <div className="flex gap-3">
+                        <div
+                          className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${typeColors[n.type]}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-surface-900">{n.text}</div>
+                          <div className="text-xs text-surface-500 mt-1 flex items-center gap-1">
+                            <MapPin size={10} />
+                            <span className="font-mono">{n.collectorId}</span>
+                            <span>· {formatNotifAge(n.createdAt)} назад</span>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
-              <div className="p-3 text-center">
+              <div className="p-3 text-center border-t border-surface-200">
                 <Link
-                  href="/predictions"
+                  href="/map"
                   className="text-sm text-primary-400 hover:text-primary-300"
                   onClick={() => setShowNotif(false)}
                 >
-                  Показать все →
+                  Открыть карту →
                 </Link>
               </div>
             </div>
@@ -131,7 +170,11 @@ export default function Header() {
 
         <div className="relative" ref={userRef}>
           <button
-            onClick={() => { setShowUser(v => !v); setShowNotif(false) }}
+            type="button"
+            onClick={() => {
+              setShowUser((v) => !v)
+              setShowNotif(false)
+            }}
             className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-surface-200 transition"
             aria-expanded={showUser}
             aria-haspopup="true"
@@ -167,7 +210,10 @@ export default function Header() {
               )}
               <button
                 type="button"
-                onClick={() => { setShowUser(false); logout() }}
+                onClick={() => {
+                  setShowUser(false)
+                  logout()
+                }}
                 className="w-full flex items-center gap-3 p-3 hover:bg-surface-200/50 text-danger rounded-b-xl"
               >
                 <LogOut size={16} />
@@ -179,8 +225,4 @@ export default function Header() {
       </div>
     </header>
   )
-}
-
-function clsx(...args: any[]) {
-  return args.filter(Boolean).join(' ')
 }
