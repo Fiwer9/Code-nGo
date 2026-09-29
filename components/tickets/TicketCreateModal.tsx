@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { ChevronDown, Loader2, X } from 'lucide-react'
 import { ApiError } from '@/lib/api/types'
 import type { TicketCreateRequest, TicketDTO, UserDTO } from '@/lib/api/ticketTypes'
 import {
@@ -66,6 +67,12 @@ export default function TicketCreateModal({
   const [loadingMeta, setLoadingMeta] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [watchersOpen, setWatchersOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -76,6 +83,7 @@ export default function TicketCreateModal({
     setWarningSource(defaultWarningSource)
     setAssigneeIds([])
     setWatcherIds([])
+    setWatchersOpen(false)
     setError(null)
 
     let cancelled = false
@@ -111,8 +119,15 @@ export default function TicketCreateModal({
         }
 
         const options = buildObjectOptions(ids)
+        const activeStaff = staff.filter((u) => u.is_active !== false)
         setObjectOptions(options)
-        setUsers(staff.filter((u) => u.is_active !== false))
+        setUsers(activeStaff)
+        // По умолчанию все подходящие наблюдатели отмечены — можно снять
+        setWatcherIds(
+          activeStaff
+            .filter((u) => u.role === 'MANAGER' || u.role === 'ADMIN' || u.role === 'OBSERVER')
+            .map((u) => u.user_id)
+        )
 
         if (defaultObjectId) {
           setObjectId(defaultObjectId)
@@ -137,7 +152,19 @@ export default function TicketCreateModal({
     [users]
   )
 
-  if (!open) return null
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !saving) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose, saving])
 
   const toggle = (list: string[], id: string, setter: (v: string[]) => void) => {
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
@@ -198,13 +225,21 @@ export default function TicketCreateModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+  if (!open || !mounted) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+      onClick={() => {
+        if (!saving) onClose()
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="ticket-create-title"
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-100 border border-surface-200 shadow-2xl"
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-100 border border-surface-200 shadow-2xl shadow-black/40"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-200 sticky top-0 bg-surface-100 z-10">
           <h2 id="ticket-create-title" className="text-lg font-bold text-surface-900">
@@ -347,27 +382,52 @@ export default function TicketCreateModal({
           )}
 
           {canPickAssignees && watchCandidates.length > 0 && (
-            <fieldset>
-              <legend className="text-sm font-medium text-surface-700 mb-2">Наблюдатели</legend>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-lg border border-surface-200 p-2">
-                {watchCandidates.map((u) => (
-                  <label key={u.user_id} className="flex items-center gap-2 text-sm text-surface-800">
-                    <input
-                      type="checkbox"
-                      checked={watcherIds.includes(u.user_id)}
-                      disabled={assigneeIds.includes(u.user_id)}
-                      onChange={() => toggle(watcherIds, u.user_id, setWatcherIds)}
-                    />
-                    <span>
-                      {u.full_name || u.user_id}
-                      <span className="text-surface-500 ml-1">
-                        ({ticketRoleLabel(u.role as TicketRole)})
-                      </span>
+            <div className="rounded-lg border border-surface-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setWatchersOpen((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-surface-200/40 transition"
+                aria-expanded={watchersOpen}
+              >
+                <span className="text-sm font-medium text-surface-700">
+                  Наблюдатели
+                  {watcherIds.length > 0 && (
+                    <span className="font-normal text-surface-500 ml-1.5">
+                      выбрано: {watcherIds.length}
                     </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+                  )}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 text-surface-500 transition-transform ${
+                    watchersOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {watchersOpen && (
+                <div className="max-h-36 overflow-y-auto space-y-1.5 border-t border-surface-200 p-2">
+                  {watchCandidates.map((u) => (
+                    <label
+                      key={u.user_id}
+                      className="flex items-center gap-2 text-sm text-surface-800"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={watcherIds.includes(u.user_id)}
+                        disabled={assigneeIds.includes(u.user_id)}
+                        onChange={() => toggle(watcherIds, u.user_id, setWatcherIds)}
+                      />
+                      <span>
+                        {u.full_name || u.user_id}
+                        <span className="text-surface-500 ml-1">
+                          ({ticketRoleLabel(u.role as TicketRole)})
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2">
@@ -394,6 +454,7 @@ export default function TicketCreateModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
