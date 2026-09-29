@@ -16,7 +16,8 @@ import type { PredictionDecision, PredictionItem } from '@/lib/api/monitoringTyp
 import {
   collectorIdOfPrediction,
   decidePrediction,
-  listPredictions
+  listAllPredictions,
+  predictionDetailEntries
 } from '@/lib/api/monitoring'
 
 function probColor(p: number): 'danger' | 'warning' | 'success' {
@@ -34,6 +35,7 @@ const colorClass = {
 export default function PredictionsPage() {
   const router = useRouter()
   const [items, setItems] = useState<PredictionItem[]>([])
+  const [total, setTotal] = useState(0)
   const [selected, setSelected] = useState<PredictionItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,8 +45,9 @@ export default function PredictionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await listPredictions({ limit: 100, offset: 0 })
+      const data = await listAllPredictions()
       setItems(data.items || [])
+      setTotal(data.pagination?.total ?? data.items?.length ?? 0)
       setSelected((prev) => {
         if (!prev) return null
         return data.items.find((p) => p.id === prev.id) || null
@@ -52,6 +55,7 @@ export default function PredictionsPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось загрузить прогнозы')
       setItems([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
@@ -79,7 +83,7 @@ export default function PredictionsPage() {
       <div>
         <h1 className="text-3xl font-bold text-surface-900">Журнал прогнозов</h1>
         <p className="text-surface-600 mt-1">
-          Результаты ML-моделей · коллектор = ID родителя
+          Все записи из API · коллектор = ID родителя · всего: {total}
         </p>
       </div>
 
@@ -214,40 +218,23 @@ export default function PredictionsPage() {
             <h3 className="font-semibold text-surface-900 mb-4">Детали прогноза</h3>
             {selected ? (
               <div className="space-y-4">
-                <div>
-                  <div className="text-xs text-surface-500">ID прогноза</div>
-                  <div className="font-mono text-surface-900">{selected.id}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-surface-500">Коллектор</div>
-                  <div className="font-mono text-surface-900">
-                    {collectorIdOfPrediction(selected)}
+                {predictionDetailEntries(selected).map((row) => (
+                  <div key={row.key}>
+                    <div className="text-xs text-surface-500">{row.label}</div>
+                    <div
+                      className={`text-surface-900 whitespace-pre-wrap break-words ${
+                        row.key === 'id' ||
+                        row.key === 'parentId' ||
+                        row.key === 'objectId' ||
+                        row.key === 'object'
+                          ? 'font-mono'
+                          : ''
+                      }`}
+                    >
+                      {row.value}
+                    </div>
                   </div>
-                </div>
-                {selected.model && (
-                  <div>
-                    <div className="text-xs text-surface-500">ML-модель</div>
-                    <div className="text-surface-900">{selected.model}</div>
-                  </div>
-                )}
-                {selected.horizon && (
-                  <div>
-                    <div className="text-xs text-surface-500">Горизонт</div>
-                    <div className="text-surface-900">{selected.horizon}</div>
-                  </div>
-                )}
-                {selected.location && (
-                  <div>
-                    <div className="text-xs text-surface-500">Локация</div>
-                    <div className="text-surface-900">{selected.location}</div>
-                  </div>
-                )}
-                {selected.status && (
-                  <div>
-                    <div className="text-xs text-surface-500">Статус</div>
-                    <div className="text-surface-900">{selected.status}</div>
-                  </div>
-                )}
+                ))}
                 <button
                   type="button"
                   className="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-lg text-sm transition"

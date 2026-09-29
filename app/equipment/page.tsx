@@ -5,8 +5,12 @@ import { Cpu, Thermometer, Wind, Droplets, Gauge, Search, AlertCircle, Loader2 }
 import Card from '@/components/Card'
 import DataTable from '@/components/DataTable'
 import { ApiError } from '@/lib/api/types'
-import type { EquipmentItem, EquipmentStats } from '@/lib/api/monitoringTypes'
-import { collectorIdOfEquipment, listEquipment } from '@/lib/api/monitoring'
+import type { EquipmentItem } from '@/lib/api/monitoringTypes'
+import {
+  collectorIdOfEquipment,
+  computeEquipmentStats
+} from '@/lib/api/monitoring'
+import { getEquipmentCached, peekEquipmentCache } from '@/lib/equipmentCache'
 
 const iconMap: Record<string, typeof Cpu> = {
   temperature: Thermometer,
@@ -37,26 +41,27 @@ function statusKey(status: string): string {
 
 export default function EquipmentPage() {
   const [search, setSearch] = useState('')
-  const [items, setItems] = useState<EquipmentItem[]>([])
-  const [stats, setStats] = useState<EquipmentStats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const cached = peekEquipmentCache()
+  const [items, setItems] = useState<EquipmentItem[]>(cached?.items ?? [])
+  const [loading, setLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    const q = search.trim()
+    if (!q && !peekEquipmentCache()) setLoading(true)
+    else if (q) setLoading(true)
     setError(null)
     try {
-      const data = await listEquipment({
-        search: search.trim() || undefined,
-        limit: 200,
-        offset: 0
+      const data = await getEquipmentCached({
+        search: q || undefined,
+        onUpdate: (fresh) => {
+          if (!search.trim()) setItems(fresh.items || [])
+        }
       })
       setItems(data.items || [])
-      setStats(data.stats)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось загрузить оборудование')
-      setItems([])
-      setStats(null)
+      if (!peekEquipmentCache() || q) setItems([])
     } finally {
       setLoading(false)
     }
@@ -67,35 +72,32 @@ export default function EquipmentPage() {
     return () => clearTimeout(t)
   }, [load, search])
 
-  const kpi = useMemo(() => {
-    if (stats) {
-      return [
-        { label: 'Всего', value: stats.total },
-        { label: 'В сети', value: stats.online },
-        { label: 'Внимание', value: stats.warning },
-        { label: 'Не в сети', value: stats.offline },
-        { label: 'На ТО', value: stats.maintenance }
-      ]
-    }
-    return [
-      { label: 'Всего', value: items.length },
-      { label: 'В сети', value: items.filter((e) => statusKey(e.status) === 'online').length },
-      { label: 'Внимание', value: items.filter((e) => statusKey(e.status) === 'warning').length },
-      { label: 'Не в сети', value: items.filter((e) => statusKey(e.status) === 'offline').length },
-      { label: 'На ТО', value: items.filter((e) => statusKey(e.status) === 'maintenance').length }
-    ]
-  }, [stats, items])
+  const stats = useMemo(() => computeEquipmentStats(items), [items])
+  const collectors = useMemo(() => {
+    const set = new Set(items.map(collectorIdOfEquipment))
+    return set.size
+  }, [items])
+
+  const kpi = [
+    { label: 'Всего датчиков', value: stats.total },
+    { label: 'Коллекторов', value: collectors },
+    { label: 'В сети', value: stats.online },
+    { label: 'Внимание', value: stats.warning },
+    { label: 'Не в сети', value: stats.offline },
+    { label: 'На ТО', value: stats.maintenance }
+  ]
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-surface-900">Оборудование</h1>
         <p className="text-surface-600 mt-1">
-          Реестр датчиков по коллекторам (ID родителя = ID коллектора)
+          Реестр датчиков по коллекторам (ID родителя = ID коллектора). Список кешируется;
+          статусы обновляются в фоне.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpi.map((s) => (
           <Card key={s.label}>
             <div className="text-xs text-surface-600">{s.label}</div>

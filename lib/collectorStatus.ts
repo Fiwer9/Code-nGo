@@ -43,7 +43,7 @@ export const COLLECTOR_STATUS_META: Record<
   ok: { label: 'В норме', markerClass: 'bg-success', color: '#10b981' },
   warning: { label: 'Внимание', markerClass: 'bg-warning', color: '#f59e0b' },
   critical: { label: 'Критический', markerClass: 'bg-danger', color: '#ef4444' },
-  offline: { label: 'Офлайн', markerClass: 'bg-surface-500', color: '#6b7280' },
+  offline: { label: 'Офлайн', markerClass: 'bg-[#6b7280]', color: '#6b7280' },
   maintenance: { label: 'ТО', markerClass: 'bg-info', color: '#06b6d4' }
 }
 

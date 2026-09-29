@@ -33,10 +33,10 @@ import { ApiError } from '@/lib/api/types'
 import type { EquipmentStats, IncidentItem, PredictionItem } from '@/lib/api/monitoringTypes'
 import {
   collectorIdOfIncident,
-  listEquipment,
   listIncidents,
   listPredictions
 } from '@/lib/api/monitoring'
+import { getEquipmentCached, peekEquipmentCache } from '@/lib/equipmentCache'
 
 const PIE_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#06b6d4', '#8b5cf6', '#10b981']
 
@@ -81,19 +81,24 @@ function buildTypePie(incidents: IncidentItem[]) {
 
 export default function DashboardPage() {
   const chart = useChartTheme()
+  const cachedEq = peekEquipmentCache()
   const [incidents, setIncidents] = useState<IncidentItem[]>([])
   const [predictions, setPredictions] = useState<PredictionItem[]>([])
-  const [eqStats, setEqStats] = useState<EquipmentStats | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [eqStats, setEqStats] = useState<EquipmentStats | null>(cachedEq?.stats ?? null)
+  const [loading, setLoading] = useState(!cachedEq)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    // При тёплом кеше не блокируем весь дашборд спиннером
+    if (!peekEquipmentCache()) setLoading(true)
     setError(null)
+
     const [incRes, predRes, eqRes] = await Promise.allSettled([
       listIncidents({ limit: 200, offset: 0 }),
       listPredictions({ limit: 200, offset: 0 }),
-      listEquipment({ limit: 1, offset: 0 })
+      getEquipmentCached({
+        onUpdate: (data) => setEqStats(data.stats)
+      })
     ])
 
     const errors: string[] = []
@@ -118,7 +123,7 @@ export default function DashboardPage() {
 
     if (eqRes.status === 'fulfilled') {
       setEqStats(eqRes.value.stats)
-    } else {
+    } else if (!peekEquipmentCache()) {
       setEqStats(null)
       errors.push(
         `Оборудование: ${eqRes.reason instanceof ApiError ? eqRes.reason.message : 'ошибка'}`

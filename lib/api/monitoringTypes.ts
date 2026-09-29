@@ -50,7 +50,7 @@ export type IncidentResponse = {
   pagination: Pagination
 }
 
-/** Ответ predictions в OpenAPI без строгой схемы — нормализуем гибко */
+/** Ответ predictions в OpenAPI без строгой схемы — нормализуем гибко, сохраняем все поля */
 export type PredictionItem = {
   id: string
   object?: string
@@ -66,6 +66,8 @@ export type PredictionItem = {
   created_at?: string | null
   location?: string | null
   decision?: string | null
+  /** Любые доп. поля из БД/API */
+  [key: string]: unknown
 }
 
 export type PredictionResponse = {

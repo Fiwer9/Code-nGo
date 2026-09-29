@@ -28,8 +28,9 @@ import {
 } from '@/lib/collectorStatus'
 import { applyMapOverrides, persistMapObjects } from '@/lib/mapObjectsStore'
 import { updateMapObject } from '@/lib/api/mapObjects'
-import { listEquipment } from '@/lib/api/monitoring'
 import { collectorsFromEquipment } from '@/lib/collectorsFromEquipment'
+import { getEquipmentCached, peekEquipmentCache } from '@/lib/equipmentCache'
+import type { EquipmentItem } from '@/lib/api/monitoringTypes'
 import { ApiError } from '@/lib/api/types'
 import type { MapSelectPoint } from '@/components/YandexMap'
 import clsx from 'clsx'
@@ -90,9 +91,13 @@ function pickDefaultSensor(sensors: CollectorSensor[]) {
 export default function MapPage() {
   const router = useRouter()
   const mapBoxRef = useRef<HTMLDivElement>(null)
-  const [baseObjects, setBaseObjects] = useState<MapObject[]>([])
-  const [objects, setObjects] = useState<MapObject[]>([])
-  const [loading, setLoading] = useState(true)
+  const cached = peekEquipmentCache()
+  const initialBase = cached ? collectorsFromEquipment(cached.items) : []
+  const [baseObjects, setBaseObjects] = useState<MapObject[]>(initialBase)
+  const [objects, setObjects] = useState<MapObject[]>(() =>
+    initialBase.length ? applyMapOverrides(initialBase) : []
+  )
+  const [loading, setLoading] = useState(initialBase.length === 0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedSensorId, setSelectedSensorId] = useState<string | null>(null)
@@ -104,25 +109,37 @@ export default function MapPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedHint, setSavedHint] = useState(false)
 
-  const reloadFromApi = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const data = await listEquipment({ limit: 500, offset: 0 })
-      const base = collectorsFromEquipment(data.items || [])
-      setBaseObjects(base)
-      setObjects(applyMapOverrides(base))
-    } catch (err) {
-      setLoadError(err instanceof ApiError ? err.message : 'Не удалось загрузить коллекторы')
-      setBaseObjects([])
-      setObjects([])
-    } finally {
-      setLoading(false)
-    }
+  const applyEquipment = useCallback((items: EquipmentItem[]) => {
+    const base = collectorsFromEquipment(items || [])
+    setBaseObjects(base)
+    setObjects(applyMapOverrides(base))
   }, [])
 
+  const reloadFromApi = useCallback(
+    async (force = false) => {
+      if (!peekEquipmentCache()) setLoading(true)
+      setLoadError(null)
+      try {
+        const data = await getEquipmentCached({
+          force,
+          onUpdate: (fresh) => applyEquipment(fresh.items)
+        })
+        applyEquipment(data.items)
+      } catch (err) {
+        if (!peekEquipmentCache()) {
+          setLoadError(err instanceof ApiError ? err.message : 'Не удалось загрузить коллекторы')
+          setBaseObjects([])
+          setObjects([])
+        }
+      } finally {
+        setLoading(false)
+      }
+    },
+    [applyEquipment]
+  )
+
   useEffect(() => {
-    reloadFromApi()
+    reloadFromApi(false)
   }, [reloadFromApi])
 
   // После создания заявки / фокуса — перечитать оверрайды (taskId) поверх базы
@@ -261,7 +278,7 @@ export default function MapPage() {
       {loadError && (
         <div className="flex items-center gap-2 text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
           <AlertCircle size={16} /> {loadError}
-          <button type="button" className="underline ml-2" onClick={reloadFromApi}>
+          <button type="button" className="underline ml-2" onClick={() => reloadFromApi(true)}>
             Повторить
           </button>
         </div>
@@ -292,7 +309,10 @@ export default function MapPage() {
                 <div className="space-y-1.5">
                   {STATUS_KEYS.map((k) => (
                     <div key={k} className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${COLLECTOR_STATUS_META[k].markerClass}`} />
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: COLLECTOR_STATUS_META[k].color }}
+                      />
                       <span className="text-surface-700">{COLLECTOR_STATUS_META[k].label}</span>
                     </div>
                   ))}
