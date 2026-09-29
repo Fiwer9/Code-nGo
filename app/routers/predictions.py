@@ -22,7 +22,7 @@ async def get_predictions(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_permissions(["predictions:read"]))
 ):
-    query = select(PredictionModel).options(selectinload(PredictionModel.object_id))
+    query = select(PredictionModel)
     
     if status:
         query = query.where(PredictionModel.status == status)
@@ -68,8 +68,9 @@ async def get_predictions(
             createdAt=p.created_at
         ))
         
+    from sqlalchemy import func
     # Count total
-    count_query = select(text("COUNT(id)")).select_from(PredictionModel)
+    count_query = select(func.count(PredictionModel.id))
     if status:
         count_query = count_query.where(PredictionModel.status == status)
     total = await db.scalar(count_query)

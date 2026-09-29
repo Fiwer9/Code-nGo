@@ -59,7 +59,8 @@ async def get_incidents_base(db: AsyncSession, limit: int, offset: int, status: 
             location=location
         ))
         
-    count_query = select(text("COUNT(id)")).select_from(IncidentModel)
+    from sqlalchemy import func
+    count_query = select(func.count(IncidentModel.id))
     if status:
         count_query = count_query.where(IncidentModel.status == status)
     total = await db.scalar(count_query)
