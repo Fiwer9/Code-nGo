@@ -12,7 +12,7 @@ from app.models import IncidentModel, ObjectModel
 from app.schemas.incident import IncidentResponse, IncidentItem, Pagination
 from app.core.permissions import require_permissions
 
-router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])
+router = APIRouter(prefix="/api/v1/incidents", tags=["Инциденты"])
 logger = logging.getLogger(__name__)
 
 async def get_incidents_base(db: AsyncSession, limit: int, offset: int, status: Optional[str] = None, search: Optional[str] = None):
@@ -67,7 +67,7 @@ async def get_incidents_base(db: AsyncSession, limit: int, offset: int, status: 
     
     return items, total
 
-@router.get("", response_model=IncidentResponse)
+@router.get("", response_model=IncidentResponse, summary="Получение списка инцидентов")
 async def get_incidents(
     search: Optional[str] = None,
     status: Optional[str] = None,
@@ -82,7 +82,7 @@ async def get_incidents(
         pagination=Pagination(limit=limit, offset=offset, total=total)
     )
 
-@router.get("/export.csv")
+@router.get("/export.csv", summary="Экспорт инцидентов в CSV")
 async def export_incidents_csv(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),

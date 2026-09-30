@@ -9,7 +9,7 @@ from app.database import get_db
 from app.schemas.equipment import EquipmentResponse, EquipmentItem, EquipmentStats, Pagination
 from app.core.permissions import require_permissions
 
-router = APIRouter(prefix="/api/v1/equipment", tags=["Equipment"])
+router = APIRouter(prefix="/api/v1/equipment", tags=["Оборудование"])
 logger = logging.getLogger(__name__)
 
 def normalize_sensor_type(sensor_type: str, sys_type: str) -> str:
@@ -28,7 +28,7 @@ def normalize_sensor_type(sensor_type: str, sys_type: str) -> str:
         return "fan"
     return "unknown"
 
-@router.get("", response_model=EquipmentResponse)
+@router.get("", response_model=EquipmentResponse, summary="Получение списка оборудования")
 async def get_equipment(
     search: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -135,7 +135,7 @@ async def get_equipment(
         pagination=Pagination(limit=limit, offset=offset, total=total)
     )
 
-@router.get("/{channel_id}")
+@router.get("/{channel_id}", summary="Получение информации об оборудовании по ID")
 async def get_equipment_by_id(
     channel_id: int,
     db: AsyncSession = Depends(get_db),

@@ -11,10 +11,10 @@ from app.models import PredictionModel, ObjectModel
 from app.schemas.prediction import PredictionItem, PredictionFactor, PredictionDecisionRequest
 from app.core.permissions import require_permissions
 
-router = APIRouter(prefix="/api/v1/predictions", tags=["Predictions"])
+router = APIRouter(prefix="/api/v1/predictions", tags=["Прогнозы"])
 logger = logging.getLogger(__name__)
 
-@router.get("", response_model=dict)
+@router.get("", response_model=dict, summary="Получение списка прогнозов")
 async def get_predictions(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -84,7 +84,7 @@ async def get_predictions(
         }
     }
 
-@router.post("/{pred_id}/decision")
+@router.post("/{pred_id}/decision", summary="Принятие решения по прогнозу")
 async def make_decision(
     pred_id: str,
     decision: PredictionDecisionRequest,

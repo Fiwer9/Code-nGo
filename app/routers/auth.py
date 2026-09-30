@@ -19,7 +19,7 @@ from app.schemas.user import LoginRequest, TokenResponse, UserCreate, UserRespon
 from app.settings import settings
 
 # Инициализация роутера FastAPI с префиксом и тегом для Swagger UI
-router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/v1/auth", tags=["Авторизация"])
 
 # Схема Bearer-авторизации для передачи JWT в заголовке `Authorization: Bearer <token>`.
 # auto_error=False позволяет вручную обрабатывать отсутствие токена и возвращать единую 401 ошибку.

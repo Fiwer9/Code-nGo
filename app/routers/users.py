@@ -11,7 +11,7 @@ from app.schemas.user import UserCreate, UserResponse, UserListResponse, UserLis
 from fastapi import Query
 from typing import Optional
 
-router = APIRouter(prefix="/api/v1/users", tags=["Users Management"])
+router = APIRouter(prefix="/api/v1/users", tags=["Пользователи"])
 
 @router.post(
     "",
@@ -145,7 +145,7 @@ async def get_users(
             two_factor_enabled=u.two_factor_enabled,
             created_at=u.created_at,
             updated_at=u.updated_at,
-            roles=[r.name for r in u.roles],
+            roles=u.roles,
             role_name=role_name
         ))
         

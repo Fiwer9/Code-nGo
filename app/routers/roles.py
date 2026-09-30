@@ -8,7 +8,7 @@ from app.models import RoleModel, PermissionModel, UserModel
 from app.schemas.role import RoleCreate, RoleResponse, RoleUpdate, PermissionResponse, AssignRolesRequest
 from app.schemas.user import UserResponse
 
-router = APIRouter(prefix="/api/v1/roles", tags=["Roles & Permissions"])
+router = APIRouter(prefix="/api/v1/roles", tags=["Роли и Права"])
 
 @router.get("/permissions", response_model=list[PermissionResponse], summary="Получить список всех прав доступа")
 async def get_all_permissions(
